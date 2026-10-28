@@ -3,14 +3,14 @@ export type FinancialPeriod = {
   revenue: number;
   costOfRevenue: number;
   operatingExpenses: number;
-  interest: number;
+  otherExpenses: number;
   taxes: number;
 };
 
 export function calculateProfits(period: FinancialPeriod) {
   const grossProfit = period.revenue - period.costOfRevenue;
   const operatingProfit = grossProfit - period.operatingExpenses;
-  const netProfit = operatingProfit - period.interest - period.taxes;
+  const netProfit = operatingProfit - period.otherExpenses - period.taxes;
   return { ...period, grossProfit, operatingProfit, netProfit };
 }
 
@@ -20,9 +20,9 @@ export function summarize(periods: FinancialPeriod[]) {
     revenue: sum.revenue + period.revenue,
     costOfRevenue: sum.costOfRevenue + period.costOfRevenue,
     operatingExpenses: sum.operatingExpenses + period.operatingExpenses,
-    interest: sum.interest + period.interest,
+    otherExpenses: sum.otherExpenses + period.otherExpenses,
     taxes: sum.taxes + period.taxes,
-  }), { month: 'Total', revenue: 0, costOfRevenue: 0, operatingExpenses: 0, interest: 0, taxes: 0 });
+  }), { month: 'Total', revenue: 0, costOfRevenue: 0, operatingExpenses: 0, otherExpenses: 0, taxes: 0 });
   return calculateProfits(totals);
 }
 
