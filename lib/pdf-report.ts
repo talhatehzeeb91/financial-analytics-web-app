@@ -21,7 +21,7 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
   function heading(title: string) {
     doc.setFillColor(...teal); doc.rect(0,0,width,28,'F');
     doc.setTextColor(255,255,255);doc.setFont('ReportSans','bold');doc.setFontSize(18);doc.text(title,margin,13);
-    doc.setFont('ReportSans','normal');doc.setFontSize(9);doc.text(`${report.currencyCode} | ${report.dateRange} | No currency conversion`,margin,22);
+    doc.setFont('ReportSans','normal');doc.setFontSize(9);doc.text(`${report.currencyCode} | Selected period: ${report.dateRange} | No currency conversion`,margin,22);
   }
   heading('ledger.  Financial summary');
   doc.setFontSize(9);doc.setFont('ReportSans','bold');doc.setTextColor(...teal);doc.text(report.label,margin,37);

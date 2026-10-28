@@ -19,7 +19,7 @@ test('CSV exports every source amount, calculated profit, selected currency and 
   const parsed = Papa.parse<Record<string,string>>(exportReportCsv(input),{header:true,skipEmptyLines:true});
   assert.deepEqual(parsed.errors,[]);assert.equal(parsed.data.length,6);
   assert.deepEqual(parsed.data[0],{
-    Dataset:'Uploaded monthly summary',SourceFile:input.filename,Currency:'PKR',Month:'2026-01',Revenue:'1000000',COGS:'600000',OperatingExpenses:'200000',OtherExpenses:'30000',Tax:'20000',GrossProfit:'400000',OperatingProfit:'200000',NetProfit:'150000',GrossMarginPercent:'40',OperatingMarginPercent:'20',NetMarginPercent:'15',
+    Dataset:'Uploaded monthly summary',SourceFile:input.filename,Currency:'PKR',Month:'2026-01',Revenue:'1000000',COGS:'600000',OperatingExpenses:'200000',OtherExpenses:'30000',Tax:'20000',GrossProfit:'400000',OperatingProfit:'200000',NetProfit:'150000',GrossMarginPercent:'40',OperatingMarginPercent:'20',NetMarginPercent:'15',PeriodFrom:'2026-01',PeriodTo:'2026-06',
   });
   assert.equal(parsed.data[2].NetProfit,'-110000');
   assert.equal(parsed.data[3].Revenue,'0');
