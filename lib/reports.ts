@@ -1,15 +1,19 @@
+import { datasetRange, selectPeriodRange, type MonthRange } from './date-range.ts';
 import { calculateProfits, margin, summarize, type FinancialPeriod } from './finance.ts';
 
-export type ReportInput = { periods: FinancialPeriod[]; currencyCode: string; filename: string; isDemo: boolean };
+export type ReportInput = { periods: FinancialPeriod[]; currencyCode: string; filename: string; isDemo: boolean; selectedRange?: MonthRange };
 export function buildReport(input: ReportInput) {
   if (!input.periods.length) throw new Error('There is no dataset to export.');
-  const rows = [...input.periods].sort((a,b) => a.month.localeCompare(b.month)).map(calculateProfits);
+  const selectedRange = input.selectedRange ?? datasetRange(input.periods);
+  const selection = selectPeriodRange(input.periods, selectedRange);
+  if (selection.error) throw new Error(selection.error);
+  const rows = selection.periods.map(calculateProfits);
   const totals = summarize(rows);
   return {
-    ...input, rows, totals,
+    ...input, rows, totals, selectedRange,
     source: input.isDemo ? 'Fictional demo data' : input.filename,
     label: input.isDemo ? 'FICTIONAL DEMO DATA — illustrative only' : 'Uploaded monthly summary',
-    dateRange: `${rows[0].month} to ${rows.at(-1)!.month}`,
+    dateRange: `${selectedRange.from} to ${selectedRange.to}`,
     expenses: [
       { name:'COGS', value:totals.costOfRevenue },
       { name:'Operating expenses', value:totals.operatingExpenses },
@@ -39,12 +43,13 @@ export function escapeCsvCell(value: string | number | null): string {
 }
 export function exportReportCsv(input: ReportInput): string {
   const report = buildReport(input);
-  const header = ['Dataset','SourceFile','Currency','Month','Revenue','COGS','OperatingExpenses','OtherExpenses','Tax','GrossProfit','OperatingProfit','NetProfit','GrossMarginPercent','OperatingMarginPercent','NetMarginPercent'];
+  const header = ['Dataset','SourceFile','Currency','Month','Revenue','COGS','OperatingExpenses','OtherExpenses','Tax','GrossProfit','OperatingProfit','NetProfit','GrossMarginPercent','OperatingMarginPercent','NetMarginPercent','PeriodFrom','PeriodTo'];
   const rows = report.rows.map(row => [
     report.label, report.source, report.currencyCode, row.month,
     row.revenue,row.costOfRevenue,row.operatingExpenses,row.otherExpenses,row.taxes,
     row.grossProfit,row.operatingProfit,row.netProfit,
     margin(row.grossProfit,row.revenue),margin(row.operatingProfit,row.revenue),margin(row.netProfit,row.revenue),
+    report.selectedRange.from, report.selectedRange.to,
   ]);
   return '\uFEFF' + [header, ...rows].map(row => row.map(escapeCsvCell).join(',')).join('\r\n') + '\r\n';
 }
