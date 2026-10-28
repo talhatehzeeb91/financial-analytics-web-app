@@ -30,6 +30,6 @@ export function margin(profit: number, revenue: number) {
   return revenue === 0 ? 0 : profit / revenue * 100;
 }
 
-export const currency = (value: number) => new Intl.NumberFormat('en-US', {
-  style: 'currency', currency: 'USD', maximumFractionDigits: 0,
+export const currency = (value: number, currencyCode = 'USD') => new Intl.NumberFormat('en-US', {
+  style: 'currency', currency: currencyCode, currencyDisplay: 'code', maximumFractionDigits: 0,
 }).format(value);

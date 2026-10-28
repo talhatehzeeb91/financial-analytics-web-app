@@ -27,7 +27,8 @@ npm run build      # Production build
 npm start          # Serve the production build (run build first)
 npm run lint       # ESLint with Next.js and TypeScript rules
 npm run typecheck  # TypeScript validation
-npm test           # Financial calculation and demo reconciliation tests
+npm test           # Financial calculation, parser and mapping tests
+npm run test:e2e   # Browser workflow against a production build
 ```
 
 ## Structure and financial definitions
@@ -48,23 +49,32 @@ Keep the environment's configured HTTPS proxy and TLS verification enabled. If n
 
 ## Local CSV and Excel import
 
-Use **Download sample CSV** for a fictional template, then choose a `.csv` or `.xlsx` file. All parsing happens locally using Papa Parse and read-excel-file; no financial records are sent to a server or persisted. A refresh or **Reset to demo** returns to fictional defaults. Invalid uploads leave the current dataset intact.
+Use the CSV or XLSX template, or choose your own monthly summary file. Parsing happens locally with Papa Parse and read-excel-file; financial records are never sent to a server or persisted. A refresh or **Reset to demo** restores the fictional USD dataset.
 
-Required column names (case-sensitive, order-independent):
+1. Select a `.csv` or `.xlsx` file. For Excel, explicitly select a worksheet; only that sheet is analyzed.
+2. Preview the headers and first five non-empty data rows. The first non-empty row must contain unique column headers.
+3. Map your columns to Month, Revenue, COGS, OperatingExpenses, OtherExpenses and Tax. Names do not need to match. Common aliases such as Period, Sales, Cost of Sales, Opex and Taxes are suggested; ambiguous matches remain unassigned. Confirm the mappings yourself. Each source column can be used once; extra unmapped columns are ignored.
+4. Month and Revenue must map to real source columns. Every expense must map to a column or explicitly use **Not applicable — use 0**. This choice requires a separate confirmation; missing financial columns never silently become zero. Blank cells in mapped financial columns remain invalid.
+5. Select the currency already used by the whole file: USD, PKR, AED, GBP or EUR. Every card, chart and table uses that currency code. Amounts are not converted or detected automatically. Templates contain fictional USD data.
+6. Click **Validate and review**, then inspect the month count, range, currency, totals and zero-expense fields. The dashboard changes only after **Import and analyze**. Editing a mapping, worksheet, currency or confirmation invalidates the review; validate again before importing.
+
+### Monthly-summary requirements
+
+The expandable **How to prepare your data** guide includes a sample table and plain-English field definitions. Both downloadable templates contain the same three fictional months and are covered by parser/mapping tests.
 
 ```csv
 Month,Revenue,COGS,OperatingExpenses,OtherExpenses,Tax
 2026-01,182000,76000,54000,2000,10000
 ```
 
-`Month` must be YYYY-MM (year 0001–9999). Store Excel months as text, not date cells. Each month must be unique. Amounts must be non-negative finite numbers with no currency symbols or thousands separators; blank amounts are invalid. **OtherExpenses excludes tax**. All amounts are interpreted as USD. For XLSX, only the first worksheet is used; additional worksheets are ignored. Maximum file size: 5 MB; maximum data rows: 1,000; maximum individual amount: $1 trillion. Blank rows are ignored. No budget or category detail is inferred.
+Prepare one row per month, not individual sales or invoices. Month must be YYYY-MM (year 0001–9999); store Excel months as text, not date cells. Months must be unique. Amounts must be finite non-negative numbers without currency symbols or thousands separators. Enter 0 when an amount does not apply, or explicitly confirm a zero mapping for the expense field. Do not use merged cells or total/subtotal rows. Expense categories must not overlap; each cost is counted once, and OtherExpenses excludes Tax.
 
-The import updates all KPIs, both charts, the date range and the monthly table. Months are sorted chronologically. Net profit = revenue − COGS − operating expenses − other expenses − tax. Losses are supported and zero revenue yields a zero margin. Validation reports missing or duplicate headers, invalid values with row and column names, duplicate months, empty files and unreadable workbooks.
+Maximum file size: 5 MB; maximum data rows per selected sheet: 1,000; maximum individual amount: 1 trillion in the selected currency. Blank rows are ignored. Validation reports missing mappings, duplicate mappings/headers/months, invalid values with row and field names, empty files and unreadable workbooks. Reported validation row numbers count non-empty data rows, with the header counted as row 1.
 
-Parser tests include an actual generated XLSX workbook, CSV quoting and sorting, invalid input rejection and file limits. `write-excel-file` is a development-only fixture generator.
+Product profitability requires product-level sales and costs, while budget variance requires a separate budget dataset; neither is provided by this monthly upload. No currency conversion, transaction aggregation or budget/category inference is performed.
 
-### Preparing a monthly summary
+### Validation
 
-The expandable **How to prepare your data** guide beside the file chooser includes a sample table, definitions of all six columns and a checklist. Download either `/financial-template.csv` or `/financial-template.xlsx`; both contain the same three fictional months and are covered by a parser import test.
+`npm test` runs calculation, strict-template parser and flexible-mapping tests, including real XLSX workbooks, multiple worksheets, downloadable templates, alias ambiguity, required confirmations, duplicate mappings, missing fields, explicit zero choices and currency formatting without conversion. `write-excel-file` is a development-only fixture generator. The browser workflow is checked against the production build, including review invalidation, worksheet switching, import/reset and consistent currency labels.
 
-Prepare one row per month, not individual sales or invoices. Enter 0 for amounts that do not apply. Do not use merged cells or total/subtotal rows. Expense categories must not overlap: each cost is counted once, and OtherExpenses excludes Tax. Use one currency per file. The dashboard always displays USD ($) and performs no currency detection or conversion; convert your figures to USD yourself before importing. Product profitability requires product-level sales and costs, while budget variance requires a separate budget dataset; neither is provided by this monthly upload.
+To reproduce the browser check, run `npm run build`, install Chromium with `npx playwright install chromium`, then run `npm run test:e2e`. If Chromium is already installed by the environment, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable instead (verified here with `/usr/bin/chromium`). Playwright starts and stops its own production server on port 3010, creates a multi-worksheet XLSX fixture and writes a mapping screenshot under `test-results/`. Do not run another server on that port. These generated artifacts are ignored by Git.

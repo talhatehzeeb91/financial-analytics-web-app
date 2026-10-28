@@ -58,3 +58,64 @@ export async function parseFinancialFile(file: File): Promise<ImportResult> {
     return { periods: [], errors: ['Could not read this file. Check that it is a valid, unencrypted CSV or XLSX workbook. For Excel, put the template columns on the first worksheet and store Month as text.'] };
   }
 }
+
+export type SourceSheet = { name: string; headers: string[]; rows: unknown[][] };
+export type Field = typeof columns[number];
+export type Mapping = Partial<Record<Field, number | 'zero'>>;
+export const currencies = ['USD', 'PKR', 'AED', 'GBP', 'EUR'] as const;
+export type CurrencyCode = typeof currencies[number];
+
+export async function readSourceFile(file: File): Promise<SourceSheet[]> {
+  if (!file.size) throw new Error('The file is empty.');
+  if (file.size > MAX_FILE_BYTES) throw new Error('Maximum file size is 5 MB.');
+  let sheets: { sheet: string; data: unknown[][] }[];
+  if (/\.csv$/i.test(file.name)) {
+    const parsed = Papa.parse<string[]>(await file.text(), { delimiter: ',', skipEmptyLines: 'greedy' });
+    if (parsed.errors.length) throw new Error(`CSV formatting error: ${parsed.errors.map(error => error.message).join('; ')}`);
+    sheets = [{ sheet: 'CSV data', data: parsed.data }];
+  } else if (/\.xlsx$/i.test(file.name)) {
+    try { sheets = await readXlsxFile(await file.arrayBuffer()); }
+    catch { throw new Error('Could not read this XLSX workbook. Use a valid, unencrypted file.'); }
+  } else throw new Error('Choose a .csv or .xlsx file.');
+  return sheets.map(sheet => {
+    const first = sheet.data.findIndex(row => row.some(value => value != null && String(value).trim() !== ''));
+    return { name: sheet.sheet, headers: first < 0 ? [] : sheet.data[first].map(value => String(value ?? '').replace(/^\uFEFF/, '').trim()), rows: first < 0 ? [] : sheet.data.slice(first + 1) };
+  });
+}
+
+const aliases: Record<Field, string[]> = {
+  Month: ['month', 'period', 'reportingmonth'],
+  Revenue: ['revenue', 'sales', 'totalsales', 'income', 'totalrevenue'],
+  COGS: ['cogs', 'costofgoodssold', 'costofsales', 'costofrevenue'],
+  OperatingExpenses: ['operatingexpenses', 'opex', 'operatingcosts'],
+  OtherExpenses: ['otherexpenses', 'othercosts', 'interest'],
+  Tax: ['tax', 'taxes', 'incometax'],
+};
+export function suggestMapping(headers: string[]): Mapping {
+  const mapping: Mapping = {};
+  for (const field of columns) {
+    const matches = headers.map((header, index) => aliases[field].includes(header.toLowerCase().replace(/[^a-z0-9]/g, '')) ? index : -1).filter(index => index >= 0);
+    if (matches.length === 1 && !Object.values(mapping).includes(matches[0])) mapping[field] = matches[0];
+  }
+  return mapping;
+}
+
+export function validateMapping(sheet: SourceSheet, mapping: Mapping, currencyCode: string, confirmed: boolean, zeroConfirmed: boolean): ImportResult {
+  const errors: string[] = [];
+  if (!currencies.includes(currencyCode as CurrencyCode)) errors.push('Select the file currency. Amounts will not be converted.');
+  if (!confirmed) errors.push('Confirm the column mappings before validating.');
+  if (Object.values(mapping).includes('zero') && !zeroConfirmed) errors.push('Confirm that the selected expense fields do not apply and should use 0.');
+  const used = new Set<number>();
+  for (const field of columns) {
+    const source = mapping[field];
+    if (source === 'zero' && field !== 'Month' && field !== 'Revenue') continue;
+    if (typeof source !== 'number' || !Number.isInteger(source) || source < 0 || source >= sheet.headers.length || !sheet.headers[source]) errors.push(`Map ${field} to a source column${field === 'Month' || field === 'Revenue' ? ' (required)' : ' or explicitly choose Not applicable — use 0'}.`);
+    else if (used.has(source)) errors.push(`Duplicate mapping: ${sheet.headers[source]} is used more than once.`);
+    else used.add(source);
+  }
+  const duplicates = sheet.headers.filter((header, index) => header && sheet.headers.indexOf(header) !== index);
+  if (duplicates.length) errors.push(`Duplicate column names: ${[...new Set(duplicates)].join(', ')}. Use unique headers.`);
+  if (errors.length) return { periods: [], errors };
+  const rows = sheet.rows.filter(row => row.some(value => value != null && String(value).trim() !== ''));
+  return validateRows([columns.slice(), ...rows.map(row => columns.map(field => mapping[field] === 'zero' ? 0 : row[mapping[field] as number]))]);
+}
