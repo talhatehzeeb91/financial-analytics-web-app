@@ -15,9 +15,9 @@ test('demo totals reconcile', () => {
   assert.equal(totals.netProfit, 336000);
   assert.equal(totals.operatingExpenses, 352000);
 });
-test('empty periods and zero revenue produce finite zero values', () => {
+test('empty periods have zero profit and zero revenue has an unavailable margin', () => {
   assert.equal(summarize([]).netProfit, 0);
-  assert.equal(margin(0, 0), 0);
+  assert.equal(margin(0, 0), null);
   assert.equal(margin(-10, 100), -10);
 });
 
@@ -26,5 +26,5 @@ test('losses and other expenses excluding tax are deducted exactly once', () => 
   assert.equal(result.grossProfit, -10);
   assert.equal(result.operatingProfit, -30);
   assert.equal(result.netProfit, -35);
-  assert.equal(margin(result.netProfit, result.revenue), 0);
+  assert.equal(margin(result.netProfit, result.revenue), null);
 });

@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { ExportReport } from '@/components/export-report';
+import { reportMargin } from '@/lib/reports';
 import { UploadPanel } from '@/components/upload-panel';
 import type { CurrencyCode } from '@/lib/import-financials';
 import type { FinancialPeriod } from '@/lib/finance';
 import { ExpenseChart, RevenueChart } from '@/components/financial-charts';
 import { demoPeriods } from '@/lib/demo-data';
-import { calculateProfits, currency, margin, summarize } from '@/lib/finance';
+import { calculateProfits, currency, summarize } from '@/lib/finance';
 
 export default function Dashboard() {
   const [periods, setPeriods] = useState<FinancialPeriod[]>(demoPeriods);
@@ -28,9 +30,9 @@ export default function Dashboard() {
   const expenseTotal = expenses.reduce((sum, expense) => sum + expense.value, 0);
   const metrics = [
     { name: 'Revenue', value: totals.revenue, detail: 'Total business income', icon: '↗' },
-    { name: 'Gross Profit', value: totals.grossProfit, detail: `${margin(totals.grossProfit, totals.revenue).toFixed(1)}% gross margin`, icon: '◈' },
-    { name: 'Operating Profit', value: totals.operatingProfit, detail: `${margin(totals.operatingProfit, totals.revenue).toFixed(1)}% operating margin`, icon: '▥' },
-    { name: 'Net Profit', value: totals.netProfit, detail: `${margin(totals.netProfit, totals.revenue).toFixed(1)}% net margin`, icon: '◎' },
+    { name: 'Gross Profit', value: totals.grossProfit, detail: `${reportMargin(totals.grossProfit, totals.revenue)} gross margin`, icon: '◈' },
+    { name: 'Operating Profit', value: totals.operatingProfit, detail: `${reportMargin(totals.operatingProfit, totals.revenue)} operating margin`, icon: '▥' },
+    { name: 'Net Profit', value: totals.netProfit, detail: `${reportMargin(totals.netProfit, totals.revenue)} net margin`, icon: '◎' },
   ];
   return <div className="min-h-screen lg:flex">
     <aside className="border-b border-slate-200 bg-white p-5 lg:fixed lg:inset-y-0 lg:w-60 lg:border-r lg:p-7">
@@ -57,6 +59,7 @@ export default function Dashboard() {
           <section id="expenses" className="panel scroll-mt-6 p-5 sm:p-6"><h2 className="font-semibold">Total expense breakdown</h2><p className="mt-1 text-xs text-slate-500">COGS, operating expenses, other expenses & tax · {dateRange}</p><ExpenseChart currencyCode={currencyCode} data={expenses} total={money(expenseTotal)}/><ul className="space-y-3">{expenses.map(expense => <li key={expense.name} className="flex items-center justify-between gap-3 text-xs"><span className="flex items-center gap-2 text-slate-500"><i className="size-2 rounded-full" style={{ background: expense.color }}/>{expense.name}</span><span className="font-medium">{money(expense.value)} <span className="ml-2 text-slate-400">{expenseTotal === 0 ? 0 : Math.round(expense.value / expenseTotal * 100)}%</span></span></li>)}</ul></section>
         </div>
         <section id="monthly-detail" className="panel scroll-mt-6 overflow-hidden"><div className="p-6"><h2 className="font-semibold">The numbers, month by month</h2><p className="mt-1 text-xs text-slate-500">{sourceLabel} · all amounts in {currencyCode}</p></div><div className="overflow-x-auto"><table className="w-full min-w-[640px] text-right text-sm"><caption className="sr-only">Monthly revenue, gross profit, operating profit and net profit for {dateRange}</caption><thead className="border-y border-slate-100 bg-slate-50 text-xs text-slate-500"><tr><th scope="col" className="px-6 py-3 text-left">Month</th>{['Revenue', 'Gross profit', 'Operating profit', 'Net profit'].map(label => <th key={label} scope="col" className="px-6 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{monthly.map(period => <tr key={period.month} className="border-b border-slate-100 last:border-0"><th scope="row" className="px-6 py-4 text-left font-medium">{formatMonth(period.month)}</th>{[period.revenue, period.grossProfit, period.operatingProfit, period.netProfit].map((value, index) => <td key={index} className={`px-6 py-4 tabular-nums ${index === 3 ? 'font-medium text-teal-700' : 'text-slate-600'}`}>{money(value)}</td>)}</tr>)}</tbody></table></div></section>
+        <ExportReport periods={periods} currencyCode={currencyCode} filename={activeFilename} isDemo={isDemo}/>
         <footer className="flex flex-wrap justify-between gap-2 text-xs text-slate-400"><p>Ledger · Financial clarity, thoughtfully presented.</p><p>{sourceLabel} · No connected accounts</p></footer>
       </div>
     </main>

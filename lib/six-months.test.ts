@@ -20,5 +20,5 @@ test('fictional six-month PKR fixture sorts, reconciles totals, losses and zero-
   assert.deepEqual([totals.revenue,totals.grossProfit,totals.operatingProfit,totals.netProfit], [5000000,2170000,1070000,760000]);
   assert.deepEqual([totals.costOfRevenue,totals.operatingExpenses,totals.otherExpenses,totals.taxes], [2830000,1100000,175000,135000]);
   assert.equal(margin(totals.netProfit,totals.revenue),15.2);
-  for (const profit of [monthly[3].grossProfit,monthly[3].operatingProfit,monthly[3].netProfit]) assert.equal(margin(profit,0),0);
+  for (const profit of [monthly[3].grossProfit,monthly[3].operatingProfit,monthly[3].netProfit]) assert.equal(margin(profit,0),null);
 });

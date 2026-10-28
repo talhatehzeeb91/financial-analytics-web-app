@@ -28,11 +28,11 @@ test('six-month PKR mapping on mobile, sorted monthly profits, losses, zero reve
   await expect(page.locator('[aria-label="Import summary"]')).toContainText('1 month ·');
   await expect(page.locator('[aria-label="Import summary"]')).not.toContainText('1 months');
   await page.getByRole('button',{ name:'Import and analyze' }).click();
-  await expect(page.getByRole('status')).toContainText('Imported 1 month in PKR');
+  await expect(page.getByRole('status', { name:'Import status' })).toContainText('Imported 1 month in PKR');
   await expect(cards).not.toContainText(/NaN|Infinity/);
-  await expect(cards.locator('article').nth(1)).toContainText('0.0% gross margin');
-  await expect(cards.locator('article').nth(2)).toContainText('0.0% operating margin');
-  await expect(cards.locator('article').nth(3)).toContainText('0.0% net margin');
+  await expect(cards.locator('article').nth(1)).toContainText('N/A gross margin');
+  await expect(cards.locator('article').nth(2)).toContainText('N/A operating margin');
+  await expect(cards.locator('article').nth(3)).toContainText('N/A net margin');
   await expect(cards).toContainText(/-PKR\s+55,000/);
   await expect(active).toContainText('fictional-zero-revenue.csv');
 
@@ -56,7 +56,7 @@ test('six-month PKR mapping on mobile, sorted monthly profits, losses, zero reve
   await page.setViewportSize({ width:1600, height:1100 });
   await page.getByRole('button',{ name:'Import and analyze' }).click();
   await expect(active).toContainText(filename);
-  await expect(page.getByRole('status')).toContainText('Imported 6 months in PKR');
+  await expect(page.getByRole('status', { name:'Import status' })).toContainText('Imported 6 months in PKR');
 
   const kpis = [['Revenue','5,000,000'],['Gross Profit','2,170,000'],['Operating Profit','1,070,000'],['Net Profit','760,000']];
   for (const [name, amount] of kpis) {
