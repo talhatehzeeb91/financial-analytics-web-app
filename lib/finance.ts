@@ -27,7 +27,7 @@ export function summarize(periods: FinancialPeriod[]) {
 }
 
 export function margin(profit: number, revenue: number) {
-  return revenue === 0 ? 0 : profit / revenue * 100;
+  return revenue === 0 ? null : profit / revenue * 100;
 }
 
 export const currency = (value: number, currencyCode = 'USD') => new Intl.NumberFormat('en-US', {
