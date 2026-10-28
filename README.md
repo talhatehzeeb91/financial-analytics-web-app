@@ -62,3 +62,9 @@ Month,Revenue,COGS,OperatingExpenses,OtherExpenses,Tax
 The import updates all KPIs, both charts, the date range and the monthly table. Months are sorted chronologically. Net profit = revenue − COGS − operating expenses − other expenses − tax. Losses are supported and zero revenue yields a zero margin. Validation reports missing or duplicate headers, invalid values with row and column names, duplicate months, empty files and unreadable workbooks.
 
 Parser tests include an actual generated XLSX workbook, CSV quoting and sorting, invalid input rejection and file limits. `write-excel-file` is a development-only fixture generator.
+
+### Preparing a monthly summary
+
+The expandable **How to prepare your data** guide beside the file chooser includes a sample table, definitions of all six columns and a checklist. Download either `/financial-template.csv` or `/financial-template.xlsx`; both contain the same three fictional months and are covered by a parser import test.
+
+Prepare one row per month, not individual sales or invoices. Enter 0 for amounts that do not apply. Do not use merged cells or total/subtotal rows. Expense categories must not overlap: each cost is counted once, and OtherExpenses excludes Tax. Use one currency per file. The dashboard always displays USD ($) and performs no currency detection or conversion; convert your figures to USD yourself before importing. Product profitability requires product-level sales and costs, while budget variance requires a separate budget dataset; neither is provided by this monthly upload.

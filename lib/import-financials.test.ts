@@ -49,3 +49,17 @@ test('file type, size, empty and corrupt workbook errors are actionable', async 
   ] as const) assert.match((await parseFinancialFile(file)).errors.join(), message);
   assert.match(validateRows([columns.slice(), ...Array.from({ length: 1001 }, () => ['2026-01',0,0,0,0,0])]).errors.join(), /at most 1000/);
 });
+
+test('downloadable CSV and XLSX templates both import and reconcile to identical data', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const results = [];
+  for (const extension of ['csv', 'xlsx']) {
+    const bytes = await readFile(new URL(`../public/financial-template.${extension}`, import.meta.url));
+    const result = await parseFinancialFile(new File([bytes], `financial-template.${extension}`));
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.periods.length, 3);
+    results.push(result.periods);
+  }
+  assert.deepEqual(results[0], results[1]);
+  assert.equal(summarize(results[0]).revenue, 571000);
+});
