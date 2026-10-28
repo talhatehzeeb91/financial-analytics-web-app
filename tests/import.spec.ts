@@ -32,7 +32,7 @@ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method
  await page.getByLabel('I confirm these column mappings describe monthly summaries.').check();
  await page.getByRole('button',{name:'Validate and review'}).click();
  assert.ok((await page.getByRole('alert').filter({hasText:'Please review'}).innerText()).includes('should use 0'));
- await page.getByLabel('I confirm Tax do not apply and should use 0 for every month.').check();
+ await page.getByLabel('I confirm these fields do not apply and should use 0 for every month: Tax.').check();
  await page.getByRole('button',{name:'Validate and review'}).click();
  await page.getByRole('heading',{name:'4. Ready to analyze'}).waitFor();
  assert.ok((await kpis.innerText()).includes('USD'));
@@ -45,7 +45,7 @@ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method
  assert.equal(await page.getByRole('button',{name:'Import and analyze'}).count(),0);
  assert.equal(await page.getByLabel('I confirm these column mappings describe monthly summaries.').isChecked(),false);
  await page.getByLabel('I confirm these column mappings describe monthly summaries.').check();
- await page.getByLabel('I confirm Tax do not apply and should use 0 for every month.').check();
+ await page.getByLabel('I confirm these fields do not apply and should use 0 for every month: Tax.').check();
  await page.getByRole('button',{name:'Validate and review'}).click();
  await page.getByRole('button',{name:'Import and analyze'}).click();
  assert.ok((await kpis.innerText()).includes('AED'));
