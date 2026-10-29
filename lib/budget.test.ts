@@ -13,7 +13,7 @@ const csv=header+',RevenueBudget\n2026-01,1000,100,100,10,10,800\n2026-02,500,10
 
 test('positive, negative, equal, zero and missing budgets have distinct revenue variance semantics',()=>{
   assert.deepEqual(revenueVariance(1000,800),{budget:800,amount:200,percentage:25,outcome:'Favorable'});
-  assert.deepEqual(revenueVariance(500,1000),{budget:1000,amount:-500,percentage:-50,outcome:'Unfavorable'});
+  assert.deepEqual(revenueVariance(500,1000),{budget:1000,amount:-500,percentage:-50,outcome:'adverse'});
   assert.deepEqual(revenueVariance(200,0),{budget:0,amount:200,percentage:null,outcome:'Favorable'});
   assert.equal(revenueVariance(0,0).outcome,'On budget');
   assert.equal(revenueVariance(0,100).percentage,-100);
@@ -46,7 +46,7 @@ test('demo budgets are realistic, complete and do not change existing actual pro
   assert.equal(report.totals.netProfit,336000);assert.equal(report.totals.revenue,1320000);
   assert.equal(report.revenueBudget.budget,1325000);assert.equal(report.revenueBudget.amount,-5000);
   assert.ok(report.revenueBudget.rows.some(row=>row.outcome==='Favorable'));
-  assert.ok(report.revenueBudget.rows.some(row=>row.outcome==='Unfavorable'));
+  assert.ok(report.revenueBudget.rows.some(row=>row.outcome==='adverse'));
 });
 test('filtered CSV and report models retain currency, missing budgets, zero budgets and period boundaries',()=>{
   const input={periods:parseCsv(csv).periods,currencyCode:'PKR',filename:'sample.csv',isDemo:false,selectedRange:{from:'2026-02',to:'2026-03'}};
