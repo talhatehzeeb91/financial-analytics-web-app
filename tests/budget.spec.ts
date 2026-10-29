@@ -56,7 +56,7 @@ test('optional monthly revenue budgets preserve legacy imports and filter actual
   await page.getByRole('button',{name:'All months',exact:true}).click();await expect(section).toContainText('Budget incomplete: 5 of 6');
   await page.getByRole('button',{name:'Reset to demo',exact:true}).click();await expect(card('Total revenue budget')).toContainText(/USD\s+1,325,000/);
   for(const extension of ['csv','xlsx']) {
-    const event=page.waitForEvent('download');await page.getByRole('link',{name:`${extension.toUpperCase()} template`,exact:false}).click();
+    const event=page.waitForEvent('download');await page.locator('section[aria-labelledby="import-title"]').getByRole('link',{name:`${extension.toUpperCase()} template`,exact:false}).click();
     const file=await event;const path=testInfo.outputPath(`template.${extension}`);await file.saveAs(path);await upload.setInputFiles(path);
     if(extension==='xlsx')await page.getByLabel('Worksheet',{exact:true}).selectOption('0');
     await expect(page.getByLabel('Revenue Budget (optional)',{exact:true})).toHaveValue('6');await analyze(page);

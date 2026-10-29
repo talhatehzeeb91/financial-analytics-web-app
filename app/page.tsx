@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { DashboardNavigation } from '@/components/dashboard-navigation';
 import { DateRangeFilter } from '@/components/date-range-filter';
 import { datasetRange, selectPeriodRange } from '@/lib/date-range';
+import { ProductProfitability } from '@/components/product-profitability';
+import type { ProductDataset } from '@/lib/products';
 import { RevenueBudget } from '@/components/revenue-budget';
 import { ExportReport } from '@/components/export-report';
 import { reportMargin } from '@/lib/reports';
@@ -15,6 +17,8 @@ import { demoPeriods } from '@/lib/demo-data';
 import { calculateProfits, currency, summarize } from '@/lib/finance';
 
 export default function Dashboard() {
+  const [productResetKey,setProductResetKey] = useState(0);
+  const [products, setProducts] = useState<ProductDataset|null>(null);
   const [periods, setPeriods] = useState<FinancialPeriod[]>(demoPeriods);
   const [activeFilename, setActiveFilename] = useState('');
   const [isDemo, setIsDemo] = useState(true);
@@ -54,8 +58,9 @@ export default function Dashboard() {
       <div className="mx-auto max-w-[1600px] space-y-7 p-6 lg:p-10">
         <section className="flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-teal-700">Your business at a glance</p><h1 className="text-3xl font-bold tracking-tight text-slate-900">Financial overview</h1><p className="mt-2 text-sm text-slate-500">A little clarity. A better next decision.</p></div><div className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600">{dateRange} <span className="ml-3 text-slate-400">· {currencyCode}</span></div></section>
         <div className="flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50/70 px-4 py-3 text-sm text-teal-900"><span aria-hidden="true">ⓘ</span><p>{isDemo ? <><strong>Sample workspace.</strong> All figures are fictional demo data for illustration and do not represent actual financial performance.</> : <><strong>Your uploaded data.</strong> Calculations use the file you selected. Financial data stays in this browser tab.<span className="mt-1 block break-all" aria-label="Active dataset"><strong>Active dataset:</strong> {activeFilename}</span></>}</p></div>
-        <UploadPanel onImport={(data, code, filename) => { setRange(datasetRange(data)); setActiveFilename(filename); setPeriods(data); setCurrencyCode(code); setIsDemo(false); }} onReset={() => { setRange(datasetRange(demoPeriods)); setActiveFilename(''); setPeriods(demoPeriods); setCurrencyCode('USD'); setIsDemo(true); }}/>
+        <UploadPanel onImport={(data, code, filename) => { setRange(datasetRange(data)); setActiveFilename(filename); setPeriods(data); setCurrencyCode(code); setIsDemo(false); }} onReset={() => { setProductResetKey(value=>value+1); setProducts(null); setRange(datasetRange(demoPeriods)); setActiveFilename(''); setPeriods(demoPeriods); setCurrencyCode('USD'); setIsDemo(true); }}/>
         <DateRangeFilter range={range} onChange={setRange} onReset={() => setRange(datasetRange(periods))} count={selectedPeriods.length} total={periods.length} error={selection.error} valid={selection.valid}/>
+        <ProductProfitability key={productResetKey} dataset={products} onChange={setProducts} range={range} monthlyCurrency={currencyCode}/>
         {!selection.error ? <>
         <section aria-label="Key financial indicators" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(metric => <article key={metric.name} className="panel p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-medium text-slate-500">{metric.name}</h2><span className="grid size-8 place-items-center rounded-lg bg-slate-50 text-teal-700" aria-hidden="true">{metric.icon}</span></div><p className="mt-4 text-3xl font-semibold tracking-tight">{money(metric.value)}</p><p className="mt-3 text-xs text-slate-500">{metric.detail}</p></article>)}</section>
         <div className="grid gap-6 xl:grid-cols-[1.8fr_1fr]">
@@ -64,8 +69,8 @@ export default function Dashboard() {
         </div>
         <section id="monthly-detail" className="panel scroll-mt-6 overflow-hidden"><div className="p-6"><h2 className="font-semibold">The numbers, month by month</h2><p className="mt-1 text-xs text-slate-500">{sourceLabel} · {dateRange} · all amounts in {currencyCode}</p></div><div className="overflow-x-auto"><table className="w-full min-w-[640px] text-right text-sm"><caption className="sr-only">Monthly revenue, gross profit, operating profit and net profit for {dateRange}</caption><thead className="border-y border-slate-100 bg-slate-50 text-xs text-slate-500"><tr><th scope="col" className="px-6 py-3 text-left">Month</th>{['Revenue', 'Gross profit', 'Operating profit', 'Net profit'].map(label => <th key={label} scope="col" className="px-6 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{monthly.map(period => <tr key={period.month} className="border-b border-slate-100 last:border-0"><th scope="row" className="px-6 py-4 text-left font-medium">{formatMonth(period.month)}</th>{[period.revenue, period.grossProfit, period.operatingProfit, period.netProfit].map((value, index) => <td key={index} className={`px-6 py-4 tabular-nums ${value < 0 ? 'font-medium text-red-700' : value > 0 && index > 0 ? 'font-medium text-teal-700' : 'text-slate-600'}`}>{money(value)}</td>)}</tr>)}</tbody></table></div></section>
         <RevenueBudget periods={selectedPeriods} currencyCode={currencyCode} periodLabel={dateRange}/>
-        <ExportReport key={`${range.from}:${range.to}:${currencyCode}:${activeFilename}:${isDemo}`} periods={selectedPeriods} selectedRange={range} currencyCode={currencyCode} filename={activeFilename} isDemo={isDemo}/>
-        </> : <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900"><strong>Analysis and exports are unavailable for this selection.</strong><p className="mt-2">Adjust the reporting period above. No zero-value totals or empty reports are shown for an invalid or empty range.</p></div>}
+        <ExportReport key={`${range.from}:${range.to}:${currencyCode}:${activeFilename}:${isDemo}`} productDataset={products} periods={selectedPeriods} selectedRange={range} currencyCode={currencyCode} filename={activeFilename} isDemo={isDemo}/>
+        </> : <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900"><strong>Monthly financial analysis and combined reports are unavailable for this selection.</strong><p className="mt-2">Adjust the reporting period above. No zero-value totals or empty reports are shown for an invalid or empty range.</p></div>}
         <footer className="flex flex-wrap justify-between gap-2 text-xs text-slate-400"><p>Ledger · Financial clarity, thoughtfully presented.</p><p>{sourceLabel} · No connected accounts</p></footer>
       </div>
     </main>
