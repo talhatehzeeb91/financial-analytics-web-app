@@ -7,6 +7,8 @@ export type FinancialPeriod = {
   taxes: number;
   revenueBudget?: number;
   cogsBudget?: number;
+  fixedCosts?: number;
+  variableCosts?: number;
 };
 
 export function calculateProfits(period: FinancialPeriod) {

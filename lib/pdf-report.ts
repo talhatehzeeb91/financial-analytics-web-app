@@ -77,6 +77,7 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
     'Monthly financial totals exclude product results. Monthly COGS budgets are separate from product cost budgets.',
     `Products: ${report.products.status}.`,
     `Revenue budget: ${report.revenueBudget.status}.`,
+    `Break-even: ${report.breakEven.provided ? report.breakEven.coverage : 'Fixed Costs and Variable Costs not provided. Cannot calculate yet'}.`,
   ];
   const notesX=width/2+5;let notesY=cursor;
   notes.forEach((text,index)=>{
@@ -162,6 +163,29 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
       columnStyles:{0:{halign:'left'},5:{halign:'left'}},headStyles:{fillColor:teal,fontStyle:'bold'},
       didParseCell(data){if(data.section==='body' && [3,4].includes(data.column.index)) {const row=budget.rows[data.row.index];if(row.amount!==null && row.amount!==0)data.cell.styles.textColor=row.amount>0?teal:[185,28,28];}},
       didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Revenue budget — continued');},
+    });
+  }
+  if(report.rows.some(row=>row.fixedCosts!==undefined||row.variableCosts!==undefined)) {
+    const analysis=report.breakEven, total=analysis.totals;
+    const amount=(value:number|null)=>value===null?'N/A':numeric.format(value);
+    doc.addPage();heading('ledger.  Break-even Analysis');
+    doc.setFont('ReportSans','normal');doc.setFontSize(8);doc.setTextColor(...ink);
+    doc.text(analysis.coverage,margin,37);
+    doc.text(`Period fixed costs: ${amount(total.fixedCosts)} | Variable costs: ${amount(total.variableCosts)} | Revenue: ${amount(total.revenue)} (${report.currencyCode})`,margin,44);
+    doc.text(`Contribution: ${amount(total.contribution)} | Contribution margin: ${cogsPercent(total.contributionMargin)} | Break-even revenue: ${amount(total.breakEvenRevenue)}`,margin,51);
+    doc.text(`Margin of safety: ${amount(total.marginOfSafety)} | Safety %: ${cogsPercent(total.marginOfSafetyPercentage)} | ${total.status}`,margin,58);
+    doc.setTextColor(...muted);doc.setFontSize(7);
+    doc.text('Contribution = revenue - variable costs; break-even = fixed costs / (contribution / revenue); safety = actual revenue - break-even.',margin,65);
+    doc.text('Period inputs are summed, not monthly percentages or break-even points. Zero revenue or non-positive contribution margin: N/A.',margin,70);
+    doc.text('Explicit cost classification only. No COGS/Opex inference or extra expenses. Assumes constant cost structure and sales mix; product costs stay separate.',margin,75);
+    const cells=(row:typeof total)=>[amount(row.revenue),amount(row.fixedCosts),amount(row.variableCosts),amount(row.contribution),cogsPercent(row.contributionMargin),amount(row.breakEvenRevenue),amount(row.marginOfSafety),cogsPercent(row.marginOfSafetyPercentage),row.status];
+    autoTable(doc,{
+      startY:81,margin:{top:38,left:margin,right:margin,bottom:19},
+      head:[['Month','Revenue','Fixed costs','Variable costs','Contribution','Contribution margin','Break-even revenue','Margin of safety','Safety %','Result / explanation']],
+      body:[...analysis.rows.map(row=>[row.month,...cells(row)]),['PERIOD TOTALS',...cells(total)]],showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',
+      styles:{font:'ReportSans',fontSize:7,cellPadding:2,halign:'right',overflow:'linebreak'},columnStyles:{0:{halign:'left',cellWidth:20},9:{halign:'left',cellWidth:50}},headStyles:{fillColor:teal,fontStyle:'bold'},
+      didParseCell(data){if(data.section==='body'){if(data.row.index===analysis.rows.length){data.cell.styles.fontStyle='bold';data.cell.styles.fillColor=[224,242,241];}if([7,8].includes(data.column.index)){const value=data.row.index===analysis.rows.length?total.marginOfSafety:analysis.rows[data.row.index].marginOfSafety;if(value)data.cell.styles.textColor=value>0?teal:[185,28,28];}}},
+      didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Break-even Analysis — continued');},
     });
   }
   let productStart=Infinity;
