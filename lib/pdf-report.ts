@@ -1,3 +1,4 @@
+import { cogsPercent } from './cogs.ts';
 import { variancePercent } from './budget.ts';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
@@ -104,6 +105,24 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
       }
     },
     didDrawPage() {if(doc.getCurrentPageInfo().pageNumber>2) heading('ledger.  Monthly results — continued');},
+  });
+  doc.addPage();heading('ledger.  COGS Analysis');
+  doc.setFont('ReportSans','normal');doc.setFontSize(9);doc.setTextColor(...ink);
+  const cogs = report.cogs;
+  doc.text(`Total COGS: ${reportMoney(cogs.totals.cogs!,report.currencyCode)} | COGS / revenue: ${cogsPercent(cogs.totals.cogsPercentage)}`,margin,37);
+  doc.text(`Gross profit: ${reportMoney(cogs.totals.grossProfit!,report.currencyCode)} | Gross margin: ${cogsPercent(cogs.totals.grossMargin)}`,margin,45);
+  doc.setFontSize(8);doc.setTextColor(...muted);
+  doc.text('Monthly financial dataset only. Product costs are separate and are never added to monthly COGS.',margin,53);
+  doc.text('Period percentages use period totals, not monthly averages. Zero revenue gives N/A. Missing COGS is not assumed to be zero.',margin,60);
+  const cogsCells = (row: typeof cogs.totals) => [numeric.format(row.cogs!),numeric.format(row.revenue!),numeric.format(row.grossProfit!),cogsPercent(row.cogsPercentage),cogsPercent(row.grossMargin)];
+  autoTable(doc,{
+    startY:66,margin:{top:38,left:margin,right:margin,bottom:19},
+    head:[['Month',`COGS (${report.currencyCode})`,`Revenue (${report.currencyCode})`,`Gross profit (${report.currencyCode})`,'COGS %','Gross margin']],
+    body:[...cogs.rows.map(row=>[row.month,...cogsCells(row)]),['PERIOD TOTALS',...cogsCells(cogs.totals)]],
+    showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',styles:{font:'ReportSans',fontSize:8,cellPadding:2.5,halign:'right',overflow:'linebreak'},
+    columnStyles:{0:{halign:'left'}},headStyles:{fillColor:teal,fontStyle:'bold'},
+    didParseCell(data){if(data.section==='body'){if(data.row.index===cogs.rows.length){data.cell.styles.fontStyle='bold';data.cell.styles.fillColor=[224,242,241];}if(data.column.index===3){const value=data.row.index===cogs.rows.length?cogs.totals.grossProfit:cogs.rows[data.row.index].grossProfit;if(value)data.cell.styles.textColor=value>0?teal:[185,28,28];}}},
+    didDrawPage(data){if(data.pageNumber>1)heading('ledger.  COGS Analysis — continued');},
   });
   if(report.revenueBudget.provided>0) {
     const budget=report.revenueBudget;

@@ -71,7 +71,7 @@ test('PDF exports paginated budget comparisons, partial coverage and missing mon
   const fonts={regular:(await readFile(new URL('../public/fonts/DejaVuSans.ttf',import.meta.url))).toString('base64'),bold:(await readFile(new URL('../public/fonts/DejaVuSans-Bold.ttf',import.meta.url))).toString('base64')};
   const periods=parseCsv(csv).periods;
   const doc=createPdfReport({periods,currencyCode:'PKR',filename:'budget.csv',isDemo:false},fonts);
-  assert.equal(doc.getNumberOfPages(),3);
+  assert.equal(doc.getNumberOfPages(),4);
   await mkdir('/tmp/budget-reports',{recursive:true});await writeFile('/tmp/budget-reports/partial.pdf',Buffer.from(doc.output('arraybuffer')));
   const multi=Array.from({length:120},(_,index)=>({...periods[index%4],month:`${2020+Math.floor(index/12)}-${String(index%12+1).padStart(2,'0')}`}));
   const multiDoc=createPdfReport({periods:multi,currencyCode:'PKR',filename:'multi-budget.csv',isDemo:false},fonts);

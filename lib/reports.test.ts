@@ -19,7 +19,7 @@ test('CSV exports every source amount, calculated profit, selected currency and 
   const parsed = Papa.parse<Record<string,string>>(exportReportCsv(input),{header:true,skipEmptyLines:true});
   assert.deepEqual(parsed.errors,[]);assert.equal(parsed.data.length,6);
   assert.deepEqual(parsed.data[0],{
-    Dataset:'Uploaded monthly summary',SourceFile:input.filename,Currency:'PKR',Month:'2026-01',Revenue:'1000000',COGS:'600000',OperatingExpenses:'200000',OtherExpenses:'30000',Tax:'20000',GrossProfit:'400000',OperatingProfit:'200000',NetProfit:'150000',GrossMarginPercent:'40',OperatingMarginPercent:'20',NetMarginPercent:'15',PeriodFrom:'2026-01',PeriodTo:'2026-06',RevenueBudget:'',RevenueBudgetVariance:'N/A',RevenueBudgetVariancePercent:'N/A',RevenueBudgetResult:'Budget not provided',ProductDataStatus:'Product data not provided',
+    Dataset:'Uploaded monthly summary',SourceFile:input.filename,Currency:'PKR',Month:'2026-01',Revenue:'1000000',COGS:'600000',OperatingExpenses:'200000',OtherExpenses:'30000',Tax:'20000',GrossProfit:'400000',OperatingProfit:'200000',NetProfit:'150000',GrossMarginPercent:'40',OperatingMarginPercent:'20',NetMarginPercent:'15',PeriodFrom:'2026-01',PeriodTo:'2026-06',RevenueBudget:'',RevenueBudgetVariance:'N/A',RevenueBudgetVariancePercent:'N/A',RevenueBudgetResult:'Budget not provided',ProductDataStatus:'Product data not provided',COGSPercent:'60',PeriodCOGS:'2830000',PeriodCOGSPercent:'56.599999999999994',PeriodGrossProfit:'2170000',PeriodGrossMarginPercent:'43.4',
   });
   assert.equal(parsed.data[2].NetProfit,'-110000');
   assert.equal(parsed.data[3].Revenue,'0');
@@ -54,7 +54,7 @@ test('PDF supports Unicode long filenames, losses, and multi-page tables with al
     bold:(await readFile(new URL('../public/fonts/DejaVuSans-Bold.ttf',import.meta.url))).toString('base64'),
   };
   const report=createPdfReport({...input,filename:'Fictional — '+ 'long monthly summary '.repeat(10)+'.csv'},fonts);
-  assert.equal(report.getNumberOfPages(),2);
+  assert.equal(report.getNumberOfPages(),3);
   const periods = Array.from({length:120},(_,index)=>({...input.periods[index%6],month:`${2020+Math.floor(index/12)}-${String(index%12+1).padStart(2,'0')}`}));
   const multi=createPdfReport({...input,periods},fonts);
   assert.ok(multi.getNumberOfPages()>3);
