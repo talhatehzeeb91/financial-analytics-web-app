@@ -5,6 +5,7 @@ export type FinancialPeriod = {
   operatingExpenses: number;
   otherExpenses: number;
   taxes: number;
+  revenueBudget?: number;
 };
 
 export function calculateProfits(period: FinancialPeriod) {

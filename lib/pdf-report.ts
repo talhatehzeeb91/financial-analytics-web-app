@@ -1,3 +1,4 @@
+import { variancePercent } from './budget.ts';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import { buildReport, reportMargin, reportMoney, type ReportInput } from './reports.ts';
@@ -72,7 +73,8 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
     'Other expenses exclude tax. Each cost is counted once.',
     'Margins are profit / revenue. Zero revenue is shown as N/A, including in the monthly table.',
     'Negative profit is a loss. PDF amounts are rounded to two decimal places; CSV retains numeric precision.',
-    'Monthly summaries only. Product profitability and budget variance are not included.',
+    'Monthly summaries only. Product profitability and expense budget variance are not included.',
+    `Revenue budget: ${report.revenueBudget.status}.`,
   ];
   const notesX=width/2+5;let notesY=cursor;
   notes.forEach((text,index)=>{
@@ -102,6 +104,25 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
     },
     didDrawPage() {if(doc.getCurrentPageInfo().pageNumber>2) heading('ledger.  Monthly results — continued');},
   });
+  if(report.revenueBudget.provided>0) {
+    const budget=report.revenueBudget;
+    doc.addPage();heading('ledger.  Revenue Budget vs Actual');
+    doc.setFont('ReportSans','normal');doc.setFontSize(9);doc.setTextColor(...ink);
+    doc.text(budget.status,margin,37);
+    doc.text(`Actual revenue: ${reportMoney(budget.actual,report.currencyCode)} | Total budget: ${budget.budget===null?'N/A':reportMoney(budget.budget,report.currencyCode)}`,margin,45);
+    doc.text(`Variance: ${budget.amount===null?'N/A':reportMoney(budget.amount,report.currencyCode)} | Variance %: ${variancePercent(budget.percentage)} | ${budget.complete?budget.outcome:'Incomplete coverage'}`,margin,53);
+    doc.setFontSize(8);doc.setTextColor(...muted);
+    doc.text('Higher revenue is favorable. Zero-budget percentages are N/A. Missing budgets are never zero; total comparisons require complete coverage.',margin,61);
+    autoTable(doc,{
+      startY:67,margin:{top:38,left:margin,right:margin,bottom:19},
+      head:[['Month',`Actual (${report.currencyCode})`,`Budget (${report.currencyCode})`,'Variance','Variance %','Result']],
+      body:budget.rows.map(row=>[row.month,numeric.format(row.revenue),row.budget===null?'Not provided':numeric.format(row.budget),row.amount===null?'N/A':numeric.format(row.amount),variancePercent(row.percentage),row.outcome]),
+      showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',styles:{font:'ReportSans',fontSize:8,cellPadding:2.6,halign:'right'},
+      columnStyles:{0:{halign:'left'},5:{halign:'left'}},headStyles:{fillColor:teal,fontStyle:'bold'},
+      didParseCell(data){if(data.section==='body' && [3,4].includes(data.column.index)) {const row=budget.rows[data.row.index];if(row.amount!==null && row.amount!==0)data.cell.styles.textColor=row.amount>0?teal:[185,28,28];}},
+      didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Revenue budget — continued');},
+    });
+  }
   const count=doc.getNumberOfPages();
   for(let page=1;page<=count;page++) {
     doc.setPage(page);doc.setFont('ReportSans','normal');doc.setFontSize(7);doc.setTextColor(...muted);

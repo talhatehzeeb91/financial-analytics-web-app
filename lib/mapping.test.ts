@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { columns, readSourceFile, suggestMapping, validateMapping, type Mapping, type SourceSheet } from './import-financials.ts';
+import { mappingColumns, readSourceFile, suggestMapping, validateMapping, type Mapping, type SourceSheet } from './import-financials.ts';
 import { currency, summarize } from './finance.ts';
 import writeXlsxFile from 'write-excel-file/node';
 const sheet: SourceSheet = { name: 'Summary', headers: ['Period','Sales','Cost of sales','Opex','Other costs','Taxes'], rows: [['2025-12',1000,100,200,30,70],['2025-01',2000,200,400,60,140]] };
@@ -63,7 +63,7 @@ test('downloadable templates work through preview and mapping flow', async () =>
   for (const extension of ['csv','xlsx']) {
     const bytes = await readFile(new URL(`../public/financial-template.${extension}`,import.meta.url));
     const [source] = await readSourceFile(new File([bytes],`template.${extension}`));
-    assert.deepEqual(source.headers, columns.slice());
+    assert.deepEqual(source.headers, mappingColumns.slice());
     const result = validateMapping(source,suggestMapping(source.headers),'USD',true,false);
     assert.equal(result.periods.length,3);
     assert.deepEqual(result.errors,[]);

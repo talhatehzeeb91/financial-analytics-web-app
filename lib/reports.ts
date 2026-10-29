@@ -1,3 +1,4 @@
+import { revenueVariance, summarizeRevenueBudget } from './budget.ts';
 import { datasetRange, selectPeriodRange, type MonthRange } from './date-range.ts';
 import { calculateProfits, margin, summarize, type FinancialPeriod } from './finance.ts';
 
@@ -10,7 +11,7 @@ export function buildReport(input: ReportInput) {
   const rows = selection.periods.map(calculateProfits);
   const totals = summarize(rows);
   return {
-    ...input, rows, totals, selectedRange,
+    ...input, rows, totals, selectedRange, revenueBudget:summarizeRevenueBudget(rows),
     source: input.isDemo ? 'Fictional demo data' : input.filename,
     label: input.isDemo ? 'FICTIONAL DEMO DATA — illustrative only' : 'Uploaded monthly summary',
     dateRange: `${selectedRange.from} to ${selectedRange.to}`,
@@ -43,13 +44,14 @@ export function escapeCsvCell(value: string | number | null): string {
 }
 export function exportReportCsv(input: ReportInput): string {
   const report = buildReport(input);
-  const header = ['Dataset','SourceFile','Currency','Month','Revenue','COGS','OperatingExpenses','OtherExpenses','Tax','GrossProfit','OperatingProfit','NetProfit','GrossMarginPercent','OperatingMarginPercent','NetMarginPercent','PeriodFrom','PeriodTo'];
+  const header = ['Dataset','SourceFile','Currency','Month','Revenue','COGS','OperatingExpenses','OtherExpenses','Tax','GrossProfit','OperatingProfit','NetProfit','GrossMarginPercent','OperatingMarginPercent','NetMarginPercent','PeriodFrom','PeriodTo','RevenueBudget','RevenueBudgetVariance','RevenueBudgetVariancePercent','RevenueBudgetResult'];
   const rows = report.rows.map(row => [
     report.label, report.source, report.currencyCode, row.month,
     row.revenue,row.costOfRevenue,row.operatingExpenses,row.otherExpenses,row.taxes,
     row.grossProfit,row.operatingProfit,row.netProfit,
     margin(row.grossProfit,row.revenue),margin(row.operatingProfit,row.revenue),margin(row.netProfit,row.revenue),
     report.selectedRange.from, report.selectedRange.to,
+    row.revenueBudget ?? '', revenueVariance(row.revenue,row.revenueBudget).amount, revenueVariance(row.revenue,row.revenueBudget).percentage, revenueVariance(row.revenue,row.revenueBudget).outcome,
   ]);
   return '\uFEFF' + [header, ...rows].map(row => row.map(escapeCsvCell).join(',')).join('\r\n') + '\r\n';
 }
