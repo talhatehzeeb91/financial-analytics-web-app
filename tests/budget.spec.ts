@@ -14,7 +14,7 @@ test('optional monthly revenue budgets preserve legacy imports and filter actual
   await page.goto('/',{waitUntil:'networkidle'});
   const section=page.locator('#revenue-budget');
   const card=(name:string)=>section.getByRole('heading',{name,exact:true}).locator('..');
-  await expect(section).toContainText('adverse');
+  await expect(section).toContainText('Adverse');
   await expect(card('Total revenue budget')).toContainText(/USD\s+1,325,000/);
   const upload=page.getByLabel('1. Choose a financial data file');
   await upload.setInputFiles(`${process.cwd()}/tests/fixtures/fictional-pkr-six-months.csv`);
@@ -31,7 +31,7 @@ test('optional monthly revenue budgets preserve legacy imports and filter actual
   await expect(card('Total revenue budget')).toContainText('Not provided');await expect(card('Variance amount')).toContainText('N/A');
   const rows=section.locator('tbody tr');await expect(rows).toHaveCount(6);
   await expect(rows.nth(0)).toContainText('Favorable');await expect(rows.nth(0)).toContainText('11.1%');
-  await expect(rows.nth(1)).toContainText('adverse');await expect(rows.nth(1)).toContainText(/-PKR\s+100,000/);
+  await expect(rows.nth(1)).toContainText('Adverse');await expect(rows.nth(1)).toContainText(/-PKR\s+100,000/);
   await expect(rows.nth(3)).toContainText('On budget');await expect(rows.nth(3)).toContainText('N/A');
   await expect(rows.nth(4)).toContainText('Not provided');await expect(rows.nth(4)).toContainText('Budget not provided');
   const chart=section.locator('.recharts-wrapper');await chart.scrollIntoViewIfNeeded();
@@ -45,7 +45,7 @@ test('optional monthly revenue budgets preserve legacy imports and filter actual
   const csvEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV',exact:true}).click();const csv=await csvEvent;const csvPath=testInfo.outputPath('budget.csv');await csv.saveAs(csvPath);
   const parsed=Papa.parse<Record<string,string>>((await readFile(csvPath)).toString(),{header:true,skipEmptyLines:true});expect(parsed.errors).toEqual([]);expect(parsed.data).toHaveLength(4);
   expect(parsed.data.map(row=>row.RevenueBudget)).toEqual(['900000','1300000','500000','0']);
-  expect(parsed.data.map(row=>row.RevenueBudgetResult)).toEqual(['Favorable','adverse','adverse','On budget']);
+  expect(parsed.data.map(row=>row.RevenueBudgetResult)).toEqual(['Favorable','Adverse','Adverse','On budget']);
   expect(parsed.data[3].RevenueBudgetVariancePercent).toBe('N/A');expect(parsed.data.every(row=>row.Currency==='PKR'&&row.PeriodTo==='2026-04')).toBe(true);
   const pdfEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download PDF',exact:true}).click();await (await pdfEvent).saveAs(testInfo.outputPath('budget.pdf'));
   await page.mouse.move(1550,10);await section.screenshot({path:testInfo.outputPath('budget-desktop.png')});
