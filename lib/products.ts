@@ -3,12 +3,13 @@ import { selectPeriodRange, type MonthRange } from './date-range.ts';
 import { MAX_AMOUNT, MAX_ROWS, type CurrencyCode, type SourceSheet } from './import-financials.ts';
 
 export const productFields=['Month','Product','Units Sold','Revenue','Product Cost'] as const;
-export const productMappingFields=[...productFields,'Revenue Budget'] as const;
+export const optionalProductFields=['Revenue Budget','Budgeted Units','Budgeted Selling Price','Cost Budget'] as const;
+export const productMappingFields=[...productFields,...optionalProductFields] as const;
 export type ProductField=typeof productMappingFields[number];
 export type ProductMapping=Partial<Record<ProductField,number>>;
-export type ProductRecord={month:string;product:string;unitsSold:number;revenue:number;productCost:number;revenueBudget?:number};
+export type ProductRecord={month:string;product:string;unitsSold:number;revenue:number;productCost:number;revenueBudget?:number;budgetedUnits?:number;budgetedSellingPrice?:number;costBudget?:number};
 export type ProductDataset={rows:ProductRecord[];currencyCode:CurrencyCode;filename:string};
-const aliases:Record<ProductField,string[]>={Month:['month','period','reportingmonth','accountingperiod'],Product:['product','productname','item','sku'], 'Units Sold':['unitssold','units','quantity','qty'],Revenue:['revenue','sales','turnover'],'Product Cost':['productcost','cost','cogs','costofgoods','productcosts'],'Revenue Budget':['revenuebudget','productrevenuebudget','salesbudget','budgetedrevenue','budgetrevenue','budget']};
+const aliases:Record<ProductField,string[]>={Month:['month','period','reportingmonth','accountingperiod'],Product:['product','productname','item','sku'], 'Units Sold':['unitssold','actualunits','actualunitssold','units','quantity','qty'],Revenue:['revenue','actualrevenue','sales','actualsales','turnover'],'Product Cost':['productcost','actualcost','actualproductcost','cost','cogs','costofgoods','productcosts'],'Revenue Budget':['revenuebudget','productrevenuebudget','salesbudget','budgetedrevenue','budgetrevenue','budget'],'Budgeted Units':['budgetedunits','budgetunits','plannedunits','budgetedquantity'],'Budgeted Selling Price':['budgetedsellingprice','budgetprice','budgetedprice','plannedprice','budgetedsalesprice'],'Cost Budget':['costbudget','budgetedcost','productcostbudget','budgetcost']};
 export function suggestProductMapping(headers:string[]):ProductMapping {
   const result:ProductMapping={};
   for(const field of productMappingFields){const matches=headers.map((header,index)=>aliases[field].includes(header.toLowerCase().replace(/[^a-z0-9]/g,''))?index:-1).filter(index=>index>=0);if(matches.length===1&&!Object.values(result).includes(matches[0]))result[field]=matches[0];}
@@ -18,7 +19,7 @@ export function validateProductMapping(sheet:SourceSheet,mapping:ProductMapping,
   const errors:string[]=[],used=new Set<number>();
   if(!confirmed)errors.push('Confirm your product column mappings before validating.');
   if(sheet.headers.some((header,index)=>header&&sheet.headers.indexOf(header)!==index))errors.push('Duplicate source headers. Use unique column names.');
-  for(const field of productMappingFields){const index=mapping[field];if(field==='Revenue Budget'&&index===undefined)continue;if(index===undefined||!Number.isInteger(index)||index<0||index>=sheet.headers.length||!sheet.headers[index])errors.push(`Map ${field} to a source column. Missing values are never assumed to be zero.`);else if(used.has(index))errors.push(`Duplicate mapping for ${field}. Each source column can be used once.`);else used.add(index);}
+  for(const field of productMappingFields){const index=mapping[field];if((optionalProductFields as readonly string[]).includes(field)&&index===undefined)continue;if(index===undefined||!Number.isInteger(index)||index<0||index>=sheet.headers.length||!sheet.headers[index])errors.push(`Map ${field} to a source column. Missing values are never assumed to be zero.`);else if(used.has(index))errors.push(`Duplicate mapping for ${field}. Each source column can be used once.`);else used.add(index);}
   const data=sheet.rows.map((cells,index)=>({cells,row:index+2})).filter(({cells})=>cells.some(value=>value!=null&&String(value).trim()!==''));
   if(!data.length)errors.push('The selected worksheet/file is empty or has no product data rows.');
   if(data.length>MAX_ROWS)errors.push(`Use at most ${MAX_ROWS} product-month rows.`);
@@ -30,15 +31,10 @@ export function validateProductMapping(sheet:SourceSheet,mapping:ProductMapping,
     if(!product||product.length>200)errors.push(`Row ${row}: Product is required and must be no longer than 200 characters.`);
     const key=JSON.stringify([month,product]);if(seen.has(key))errors.push(`Row ${row}: duplicate Month and Product. Use one summary row per product per month.`);seen.add(key);
     const values=(['Units Sold','Revenue','Product Cost']as const).map(field=>{const raw=cells[mapping[field]!],text=typeof raw==='string'?raw.trim():'';const value=typeof raw==='number'?raw:/^\d+(\.\d+)?$/.test(text)?Number(text):NaN;if(!Number.isFinite(value)||value<0||value>MAX_AMOUNT)errors.push(`Row ${row}: ${field} must be a non-negative number no greater than ${MAX_AMOUNT}. Blank values, currency symbols and separators are not allowed.`);return value;});
-    const budgetIndex=mapping['Revenue Budget'];
-    const rawBudget=budgetIndex===undefined?undefined:cells[budgetIndex];
-    let revenueBudget:number|undefined;
-    if(rawBudget!==undefined&&rawBudget!==null&&String(rawBudget).trim()!==''){
-      const text=typeof rawBudget==='string'?rawBudget.trim():'';
-      revenueBudget=typeof rawBudget==='number'?rawBudget:/^\d+(\.\d+)?$/.test(text)?Number(text):NaN;
-      if(!Number.isFinite(revenueBudget)||revenueBudget<0||revenueBudget>MAX_AMOUNT)errors.push(`Row ${row}: Revenue Budget must be a non-negative number no greater than ${MAX_AMOUNT}, or blank when unavailable.`);
-    }
-    rows.push({...(revenueBudget===undefined?{}:{revenueBudget}),month,product,unitsSold:values[0],revenue:values[1],productCost:values[2]});
+    const optional:Partial<Pick<ProductRecord,'revenueBudget'|'budgetedUnits'|'budgetedSellingPrice'|'costBudget'>>={};
+    const keys=['revenueBudget','budgetedUnits','budgetedSellingPrice','costBudget'] as const;
+    optionalProductFields.forEach((field,index)=>{const column=mapping[field];const raw=column===undefined?undefined:cells[column];if(raw===undefined||raw===null||String(raw).trim()==='')return;const text=typeof raw==='string'?raw.trim():'';const value=typeof raw==='number'?raw:/^\d+(\.\d+)?$/.test(text)?Number(text):NaN;if(!Number.isFinite(value)||value<0||value>MAX_AMOUNT)errors.push(`Row ${row}: ${field} must be a non-negative number no greater than ${MAX_AMOUNT}, or blank when unavailable.`);else optional[keys[index]]=value;});
+    rows.push({...optional,month,product,unitsSold:values[0],revenue:values[1],productCost:values[2]});
   }
   return errors.length?{rows:[],errors}:{rows:rows.sort((a,b)=>a.month.localeCompare(b.month)||a.product.localeCompare(b.product)),errors:[]};
 }

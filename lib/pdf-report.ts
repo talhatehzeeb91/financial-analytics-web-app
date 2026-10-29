@@ -164,6 +164,38 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
       didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Product budgets — continued',report.products.currencyCode);},
     });
   }
+  if(report.salesCost.provided>0){
+    const values=report.salesCost;
+    const price=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:6});
+    const amount=(value:number|null|undefined)=>value==null?'N/A':numeric.format(value);
+    doc.addPage();heading('ledger.  Sales plan reconciliation',report.products.currencyCode);
+    doc.setFont('ReportSans','normal');doc.setFontSize(8);doc.setTextColor(...ink);
+    const labels:string[]=doc.splitTextToSize(`Selected product: ${input.selectedProduct||'All products'} | Sales breakdown coverage: ${values.salesProvided}/${values.count}; cost budgets: ${values.costsProvided}/${values.count}`,usable);
+    doc.text(labels,margin,37);const y=37+labels.length*4;
+    doc.text('Explicit revenue budget must match budgeted units x budgeted selling price (0.01 currency tolerance plus floating-point precision).',margin,y+4);
+    doc.text('Mismatch or missing plan: price/volume unavailable. Zero units + zero revenue: price N/A, price variance 0. Positive revenue + zero units: unavailable.',margin,y+10);
+    autoTable(doc,{
+      startY:y+16,margin:{top:38,left:margin,right:margin,bottom:19},
+      head:[['Month','Product','Actual units','Budget units','Actual price','Budget price','Revenue budget','Units x price','Plan difference','Status']],
+      body:values.rows.map(row=>[row.month,row.product,String(row.unitsSold),row.budgetedUnits===undefined?'Not provided':String(row.budgetedUnits),row.actualSellingPrice===null?'N/A':price.format(row.actualSellingPrice),row.budgetedSellingPrice===undefined?'Not provided':price.format(row.budgetedSellingPrice),amount(row.revenueBudget),amount(row.expectedRevenueBudget),row.reconciliationDifference===null?'N/A':price.format(row.reconciliationDifference),row.reconciliation]),
+      showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',styles:{font:'ReportSans',fontSize:7,cellPadding:2,halign:'right',overflow:'linebreak'},columnStyles:{0:{halign:'left'},1:{halign:'left',cellWidth:42},9:{cellWidth:30}},headStyles:{fillColor:teal,fontStyle:'bold'},
+      didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Sales plans — continued',report.products.currencyCode);},
+    });
+    doc.addPage();heading('ledger.  Sales & cost variances',report.products.currencyCode);
+    doc.setFont('ReportSans','normal');doc.setFontSize(8);doc.setTextColor(...ink);
+    doc.text(`Volume: ${amount(values.volumeVariance)} | Price: ${amount(values.priceVariance)} | Total revenue variance: ${amount(values.revenueVariance)} (${report.products.currencyCode})`,margin,37);
+    doc.text(`Cost budget: ${amount(values.costBudget)} | Actual cost: ${amount(values.actualCost)} | Cost variance: ${amount(values.costVariance)}`,margin,44);
+    doc.text('Positive sales variances and cost savings are Favorable; negative is Adverse. Totals are sums of row variances only with complete coverage.',margin,51);
+    doc.text('Volume = (actual units - budget units) x budget price; price = (actual price - budget price) x actual units; cost = cost budget - actual cost.',margin,58);
+    const label=(value:number|null)=>`${amount(value)}\n${value===null?'Not available':value>0?'Favorable':value<0?'Adverse':'On budget'}`;
+    autoTable(doc,{
+      startY:64,margin:{top:38,left:margin,right:margin,bottom:19},head:[['Month','Product','Volume variance','Price variance','Revenue variance','Cost budget','Actual cost','Cost variance']],
+      body:values.rows.map(row=>[row.month,row.product,label(row.volumeVariance),label(row.priceVariance),amount(row.revenueVariance),amount(row.costBudget),amount(row.productCost),label(row.costVariance)]),
+      showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',styles:{font:'ReportSans',fontSize:8,cellPadding:2.5,halign:'right',overflow:'linebreak'},columnStyles:{0:{halign:'left'},1:{halign:'left',cellWidth:55}},headStyles:{fillColor:teal,fontStyle:'bold'},
+      didParseCell(data){if(data.section==='body'&&[2,3,4,7].includes(data.column.index)){const row=values.rows[data.row.index];const value=data.column.index===2?row.volumeVariance:data.column.index===3?row.priceVariance:data.column.index===4?row.revenueVariance:row.costVariance;if(value!==null&&value!==0)data.cell.styles.textColor=value>0?teal:[185,28,28];}},
+      didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Variances — continued',report.products.currencyCode);},
+    });
+  }
   const count=doc.getNumberOfPages();
   for(let page=1;page<=count;page++) {
     doc.setPage(page);doc.setFont('ReportSans','normal');doc.setFontSize(7);doc.setTextColor(...muted);

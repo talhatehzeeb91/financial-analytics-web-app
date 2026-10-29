@@ -139,3 +139,18 @@ Product-month variance = actual product revenue − revenue budget. Positive is 
 The existing product CSV adds aggregated revenue budget, variance amount/percentage/result and coverage counts per product. **Download product budget CSV** / **Export product budget CSV** provides product-month detail, with selected period, product filter, source filename and product currency. Missing budgets are blank; unavailable amounts/percentages are N/A. PDF adds a paginated product-budget table and totals in the product currency, labeled with the selected product and reporting period. Neither exports nor analysis combine product figures with monthly totals or convert currencies. Parsing and exports remain browser-only.
 
 Focused tests cover positive/negative/equal, zero/missing/invalid budgets, optional/duplicate mappings, partial coverage, weighted totals, product/period filtering, template imports, formula-safe CSV, PDF pagination, unchanged overall monthly budgets, legacy imports and mobile layout.
+
+## Product sales price/volume and cost variances
+
+Continue using **Units Sold** for actual units, **Revenue** for actual revenue, and **Product Cost** for actual total cost. Aliases such as Actual Units / Actual Revenue / Actual Cost are accepted. The product templates add optional **Budgeted Units**, **Budgeted Selling Price** and **Cost Budget** alongside the existing optional Revenue Budget. Old files remain compatible; unmapped or blank plan values remain missing, never zero. Provided values use the same non-negative finite-number limits as the original product fields.
+
+- Sales volume variance = (actual units − budgeted units) × budgeted selling price.
+- Actual selling price = actual revenue ÷ actual units; sales price variance = (actual price − budgeted price) × actual units.
+- Total sales revenue variance remains actual revenue − the explicitly supplied Revenue Budget.
+- Cost variance = cost budget − actual total cost. Positive cost savings and positive sales variances are Favorable, negative is Adverse, and zero is On budget.
+
+Price/volume decomposition requires all sales-plan fields and reconciliation of the explicit Revenue Budget with Budgeted Units × Budgeted Selling Price. A mismatch is visibly flagged and exported; original revenue-budget and cost comparisons remain valid, but price/volume variances are N/A. Budgets are never silently overwritten or derived. The tolerance is 0.01 currency units plus floating-point precision. Expected planned revenue and its difference from the supplied budget are retained for audit; small tolerated differences can mean the decomposition differs from total revenue variance by that disclosed rounding amount.
+
+For actual units = 0 and revenue = 0, actual price is N/A and price variance is 0; the valid volume effect still applies. Positive revenue with zero units cannot produce a meaningful actual price, so price/volume decomposition is unavailable. Cost-only budgets work without a sales plan. Zero cost budgets are explicit zero, not missing.
+
+The existing product/period filters apply to every row and export. Totals sum row-level variances (not averaged prices) only with complete valid coverage. Cost-budget coverage is independent of sales-plan coverage; incomplete aggregates show N/A. Profitability, monthly financial calculations and overall monthly budget analysis are unchanged. The product CSV adds aggregate price/volume and cost-budget variances/coverage; product budget CSV includes raw plan inputs, actual price, planned revenue, reconciliation status/difference and individual variance outcomes. PDF includes separate plan-reconciliation and sales/cost-variance tables with pagination and the product currency. No conversion or server processing is added.
