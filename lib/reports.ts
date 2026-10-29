@@ -1,3 +1,4 @@
+import { cogsBudgetVariance, summarizeCogsBudget } from './cogs-budget.ts';
 import { analyzeCogs } from './cogs.ts';
 import {salesCostTotals,summarizeSalesCost} from './product-variances.ts';
 import {productBudgetTotals,summarizeProductBudgets} from './product-budget.ts';
@@ -17,7 +18,7 @@ export function buildReport(input: ReportInput) {
   const rows = selection.periods.map(calculateProfits);
   const totals = summarize(rows);
   return {
-    ...input, rows, totals, cogs, selectedRange, products:summarizeProducts(input.productDataset,selectedRange,input.selectedProduct), productBudgets:summarizeProductBudgets(input.productDataset,selectedRange,input.selectedProduct), salesCost:summarizeSalesCost(input.productDataset,selectedRange,input.selectedProduct), revenueBudget:summarizeRevenueBudget(rows),
+    ...input, rows, totals, cogs, cogsBudget:summarizeCogsBudget(selection.periods), selectedRange, products:summarizeProducts(input.productDataset,selectedRange,input.selectedProduct), productBudgets:summarizeProductBudgets(input.productDataset,selectedRange,input.selectedProduct), salesCost:summarizeSalesCost(input.productDataset,selectedRange,input.selectedProduct), revenueBudget:summarizeRevenueBudget(rows),
     source: input.isDemo ? 'Fictional demo data' : input.filename,
     label: input.isDemo ? 'FICTIONAL DEMO DATA — illustrative only' : 'Uploaded monthly summary',
     dateRange: `${selectedRange.from} to ${selectedRange.to}`,
@@ -50,7 +51,7 @@ export function escapeCsvCell(value: string | number | null): string {
 }
 export function exportReportCsv(input: ReportInput): string {
   const report = buildReport(input);
-  const header = ['Dataset','SourceFile','Currency','Month','Revenue','COGS','OperatingExpenses','OtherExpenses','Tax','GrossProfit','OperatingProfit','NetProfit','GrossMarginPercent','OperatingMarginPercent','NetMarginPercent','PeriodFrom','PeriodTo','RevenueBudget','RevenueBudgetVariance','RevenueBudgetVariancePercent','RevenueBudgetResult','ProductDataStatus','COGSPercent','PeriodCOGS','PeriodCOGSPercent','PeriodGrossProfit','PeriodGrossMarginPercent'];
+  const header = ['Dataset','SourceFile','Currency','Month','Revenue','COGS','OperatingExpenses','OtherExpenses','Tax','GrossProfit','OperatingProfit','NetProfit','GrossMarginPercent','OperatingMarginPercent','NetMarginPercent','PeriodFrom','PeriodTo','RevenueBudget','RevenueBudgetVariance','RevenueBudgetVariancePercent','RevenueBudgetResult','ProductDataStatus','COGSPercent','PeriodCOGS','PeriodCOGSPercent','PeriodGrossProfit','PeriodGrossMarginPercent','COGSBudget','COGSBudgetVariance','COGSBudgetVariancePercent','COGSBudgetResult','PeriodCOGSBudget','PeriodCOGSBudgetVariance','PeriodCOGSBudgetVariancePercent','COGSBudgetCoverage'];
   const rows = report.rows.map(row => [
     report.label, report.source, report.currencyCode, row.month,
     row.revenue,row.costOfRevenue,row.operatingExpenses,row.otherExpenses,row.taxes,
@@ -59,6 +60,7 @@ export function exportReportCsv(input: ReportInput): string {
     report.selectedRange.from, report.selectedRange.to,
     row.revenueBudget ?? '', revenueVariance(row.revenue,row.revenueBudget).amount, revenueVariance(row.revenue,row.revenueBudget).percentage, revenueVariance(row.revenue,row.revenueBudget).outcome, report.products.status,
     margin(row.costOfRevenue,row.revenue), report.cogs.totals.cogs, report.cogs.totals.cogsPercentage, report.cogs.totals.grossProfit, report.cogs.totals.grossMargin,
+    row.cogsBudget ?? '', cogsBudgetVariance(row.costOfRevenue,row.cogsBudget).amount, cogsBudgetVariance(row.costOfRevenue,row.cogsBudget).percentage, cogsBudgetVariance(row.costOfRevenue,row.cogsBudget).outcome, report.cogsBudget.budget ?? '', report.cogsBudget.amount, report.cogsBudget.percentage, report.cogsBudget.status,
   ]);
   return '\uFEFF' + [header, ...rows].map(row => row.map(escapeCsvCell).join(',')).join('\r\n') + '\r\n';
 }

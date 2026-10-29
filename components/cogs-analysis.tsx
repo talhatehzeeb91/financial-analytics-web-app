@@ -1,5 +1,6 @@
 'use client';
 import { CartesianGrid, Legend, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CogsBudget } from './cogs-budget';
 import { analyzeCogs, cogsPercent } from '@/lib/cogs';
 import type { FinancialPeriod } from '@/lib/finance';
 import { reportMoney } from '@/lib/reports';
@@ -31,5 +32,6 @@ export function CogsAnalysis({ periods, currencyCode, periodLabel }: { periods: 
       </div>
       <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[650px] text-right text-sm"><caption className="sr-only">Monthly COGS analysis in {currencyCode}</caption><thead className="bg-slate-50 text-xs text-slate-500"><tr>{['Month','COGS','Revenue','Gross profit','COGS %','Gross margin'].map(label => <th key={label} scope="col" className="px-3 py-3">{label}</th>)}</tr></thead><tbody>{result.rows.map(row => <tr key={row.month} className="border-b border-slate-100"><th scope="row" className="px-3 py-3 font-medium">{row.month}</th><td className="px-3 py-3">{money(row.cogs)}</td><td className="px-3 py-3">{money(row.revenue)}</td><td className={`px-3 py-3 ${row.grossProfit === null || row.grossProfit === 0 ? 'text-slate-600' : row.grossProfit < 0 ? 'text-red-700' : 'text-teal-700'}`}>{money(row.grossProfit)}</td><td className="px-3 py-3">{cogsPercent(row.cogsPercentage)}</td><td className="px-3 py-3">{cogsPercent(row.grossMargin)}</td></tr>)}</tbody><tfoot className="bg-teal-50 font-semibold"><tr><th scope="row" className="px-3 py-3">Period totals</th><td className="px-3 py-3">{money(result.totals.cogs)}</td><td className="px-3 py-3">{money(result.totals.revenue)}</td><td className="px-3 py-3">{money(result.totals.grossProfit)}</td><td className="px-3 py-3">{cogsPercent(result.totals.cogsPercentage)}</td><td className="px-3 py-3">{cogsPercent(result.totals.grossMargin)}</td></tr></tfoot></table></div>
     </>}
+    <CogsBudget periods={periods} currencyCode={currencyCode}/>
   </section>;
 }
