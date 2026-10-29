@@ -67,7 +67,7 @@ test('both updated product templates import real optional budgets without changi
 test('PDF contains filtered product-budget detail, adverse labels and multi-page records with missing budgets',async()=>{
   const fonts={regular:(await readFile(new URL('../public/fonts/DejaVuSans.ttf',import.meta.url))).toString('base64'),bold:(await readFile(new URL('../public/fonts/DejaVuSans-Bold.ttf',import.meta.url))).toString('base64')};
   const input={periods:demoPeriods,currencyCode:'USD',filename:'',isDemo:true,productDataset:dataset,selectedRange:range,selectedProduct:'A'};
-  const doc=createPdfReport(input,fonts);assert.equal(doc.getNumberOfPages(),5);await mkdir('/tmp/product-budget-reports',{recursive:true});await writeFile('/tmp/product-budget-reports/filtered.pdf',Buffer.from(doc.output('arraybuffer')));
+  const doc=createPdfReport(input,fonts);assert.equal(doc.getNumberOfPages(),6);await mkdir('/tmp/product-budget-reports',{recursive:true});await writeFile('/tmp/product-budget-reports/filtered.pdf',Buffer.from(doc.output('arraybuffer')));
   const rows=Array.from({length:120},(_,index)=>({...dataset.rows[index%5],product:`Fictional product ${index}`,month:`${2020+Math.floor(index/12)}-${String(index%12+1).padStart(2,'0')}`}));
   const multi=createPdfReport({...input,productDataset:{...dataset,rows},selectedProduct:'',selectedRange:{from:'2020-01',to:'2030-12'},periods:[{...demoPeriods[0],month:'2020-01'}]},fonts);assert.ok(multi.getNumberOfPages()>5);await writeFile('/tmp/product-budget-reports/multi.pdf',Buffer.from(multi.output('arraybuffer')));
 });
