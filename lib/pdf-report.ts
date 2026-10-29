@@ -74,7 +74,7 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
     'Other expenses exclude tax. Each cost is counted once.',
     'Margins are profit / revenue. Zero revenue is shown as N/A, including in the monthly table.',
     'Negative profit is a loss. PDF amounts are rounded to two decimal places; CSV retains numeric precision.',
-    'Monthly financial totals exclude product results. Expense budget variance is not included.',
+    'Monthly financial totals exclude product results. Monthly COGS budgets are separate from product cost budgets.',
     `Products: ${report.products.status}.`,
     `Revenue budget: ${report.revenueBudget.status}.`,
   ];
@@ -114,9 +114,10 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
   doc.setFontSize(8);doc.setTextColor(...muted);
   doc.text('Monthly financial dataset only. Product costs are separate and are never added to monthly COGS.',margin,53);
   doc.text('Period percentages use period totals, not monthly averages. Zero revenue gives N/A. Missing COGS is not assumed to be zero.',margin,60);
+  doc.text(`COGS budget: ${report.cogsBudget.status}. Missing budgets are never zero.`,margin,67);
   const cogsCells = (row: typeof cogs.totals) => [numeric.format(row.cogs!),numeric.format(row.revenue!),numeric.format(row.grossProfit!),cogsPercent(row.cogsPercentage),cogsPercent(row.grossMargin)];
   autoTable(doc,{
-    startY:66,margin:{top:38,left:margin,right:margin,bottom:19},
+    startY:73,margin:{top:38,left:margin,right:margin,bottom:19},
     head:[['Month',`COGS (${report.currencyCode})`,`Revenue (${report.currencyCode})`,`Gross profit (${report.currencyCode})`,'COGS %','Gross margin']],
     body:[...cogs.rows.map(row=>[row.month,...cogsCells(row)]),['PERIOD TOTALS',...cogsCells(cogs.totals)]],
     showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',styles:{font:'ReportSans',fontSize:8,cellPadding:2.5,halign:'right',overflow:'linebreak'},
@@ -124,6 +125,26 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
     didParseCell(data){if(data.section==='body'){if(data.row.index===cogs.rows.length){data.cell.styles.fontStyle='bold';data.cell.styles.fillColor=[224,242,241];}if(data.column.index===3){const value=data.row.index===cogs.rows.length?cogs.totals.grossProfit:cogs.rows[data.row.index].grossProfit;if(value)data.cell.styles.textColor=value>0?teal:[185,28,28];}}},
     didDrawPage(data){if(data.pageNumber>1)heading('ledger.  COGS Analysis — continued');},
   });
+  if(report.cogsBudget.provided>0) {
+    const budget=report.cogsBudget;
+    const amount=(value:number|null)=>value===null?'N/A':reportMoney(value,report.currencyCode);
+    doc.addPage();heading('ledger.  COGS Budget vs Actual');
+    doc.setFont('ReportSans','normal');doc.setFontSize(9);doc.setTextColor(...ink);
+    doc.text(`${budget.status} | Coverage: ${budget.provided} of ${budget.count} months`,margin,37);
+    doc.text(`Actual COGS: ${amount(budget.actual)} | Total COGS budget: ${amount(budget.budget)}`,margin,45);
+    doc.text(`Variance: ${amount(budget.amount)} | Variance %: ${cogsPercent(budget.percentage)} | ${budget.complete?budget.outcome:'Incomplete coverage'}`,margin,53);
+    doc.setFontSize(8);doc.setTextColor(...muted);
+    doc.text('Budget - actual COGS. Positive savings: Favorable; negative: Adverse. Zero or missing budget percentages: N/A.',margin,61);
+    doc.text('Period comparisons use summed budgets and actuals, requiring complete coverage. Product cost variance is separate.',margin,68);
+    autoTable(doc,{
+      startY:74,margin:{top:38,left:margin,right:margin,bottom:19},
+      head:[['Month','Actual COGS','COGS budget','Variance','Variance %','Result']],
+      body:[...budget.rows.map(row=>[row.month,amount(row.costOfRevenue),row.budget===null?'Not provided':amount(row.budget),amount(row.amount),cogsPercent(row.percentage),row.outcome]),['PERIOD TOTALS',amount(budget.actual),budget.budget===null?'Not provided':amount(budget.budget),amount(budget.amount),cogsPercent(budget.percentage),budget.complete?budget.outcome:'Incomplete coverage']],
+      showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',styles:{font:'ReportSans',fontSize:8,cellPadding:2.5,halign:'right',overflow:'linebreak'},columnStyles:{0:{halign:'left'}},headStyles:{fillColor:teal,fontStyle:'bold'},
+      didParseCell(data){if(data.section==='body'){if(data.row.index===budget.rows.length){data.cell.styles.fontStyle='bold';data.cell.styles.fillColor=[224,242,241];}if([3,4,5].includes(data.column.index)){const value=data.row.index===budget.rows.length?budget.amount:budget.rows[data.row.index].amount;if(value)data.cell.styles.textColor=value>0?teal:[185,28,28];}}},
+      didDrawPage(data){if(data.pageNumber>1)heading('ledger.  COGS Budgets — continued');},
+    });
+  }
   if(report.revenueBudget.provided>0) {
     const budget=report.revenueBudget;
     doc.addPage();heading('ledger.  Revenue Budget vs Actual');
