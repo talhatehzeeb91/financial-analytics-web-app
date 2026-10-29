@@ -48,7 +48,7 @@ test('local CSV and PDF downloads reflect the active dataset, currency and demo 
   const pdf=await download(page,'Download PDF',testInfo.outputPath('pkr-report.pdf'));
   expect(pdf.subarray(0,5).toString()).toBe('%PDF-');
   expect(pdf.length).toBeGreaterThan(10000);
-  await expect(page.getByRole('status',{name:'Export status'})).toContainText('PDF downloaded');
+  await expect(page.getByRole('status',{name:'Export status',exact:true})).toContainText('PDF downloaded');
   // Merely selecting another file cannot change what is exported.
   await page.getByLabel('1. Choose a financial data file').setInputFiles({name:'replacement.csv',mimeType:'text/csv',buffer:bytes});
   const pending=await download(page,'Download CSV',testInfo.outputPath('while-previewing.csv'));
