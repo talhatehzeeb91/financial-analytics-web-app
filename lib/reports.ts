@@ -1,9 +1,11 @@
+import {salesCostTotals,summarizeSalesCost} from './product-variances.ts';
+import {productBudgetTotals,summarizeProductBudgets} from './product-budget.ts';
 import { summarizeProducts, type ProductDataset } from './products.ts';
 import { revenueVariance, summarizeRevenueBudget } from './budget.ts';
 import { datasetRange, selectPeriodRange, type MonthRange } from './date-range.ts';
 import { calculateProfits, margin, summarize, type FinancialPeriod } from './finance.ts';
 
-export type ReportInput = { periods: FinancialPeriod[]; currencyCode: string; filename: string; isDemo: boolean; selectedRange?: MonthRange; productDataset?: ProductDataset|null };
+export type ReportInput = { periods: FinancialPeriod[]; currencyCode: string; filename: string; isDemo: boolean; selectedRange?: MonthRange; productDataset?: ProductDataset|null; selectedProduct?:string };
 export function buildReport(input: ReportInput) {
   if (!input.periods.length) throw new Error('There is no dataset to export.');
   const selectedRange = input.selectedRange ?? datasetRange(input.periods);
@@ -12,7 +14,7 @@ export function buildReport(input: ReportInput) {
   const rows = selection.periods.map(calculateProfits);
   const totals = summarize(rows);
   return {
-    ...input, rows, totals, selectedRange, products:summarizeProducts(input.productDataset,selectedRange), revenueBudget:summarizeRevenueBudget(rows),
+    ...input, rows, totals, selectedRange, products:summarizeProducts(input.productDataset,selectedRange,input.selectedProduct), productBudgets:summarizeProductBudgets(input.productDataset,selectedRange,input.selectedProduct), salesCost:summarizeSalesCost(input.productDataset,selectedRange,input.selectedProduct), revenueBudget:summarizeRevenueBudget(rows),
     source: input.isDemo ? 'Fictional demo data' : input.filename,
     label: input.isDemo ? 'FICTIONAL DEMO DATA — illustrative only' : 'Uploaded monthly summary',
     dateRange: `${selectedRange.from} to ${selectedRange.to}`,
@@ -59,10 +61,19 @@ export function exportReportCsv(input: ReportInput): string {
 
 // Product results use their own CSV, so monthly financial values and currencies
 // can never be accidentally summed with product-level measures.
-export function exportProductCsv(dataset: ProductDataset, range: MonthRange): string {
-  const result=summarizeProducts(dataset,range);
+export function exportProductCsv(dataset: ProductDataset, range: MonthRange, selectedProduct=''): string {
+  const result=summarizeProducts(dataset,range,selectedProduct);
   if(!result.rows.length)throw new Error(result.status);
-  const head=['ProductSourceFile','Currency','PeriodFrom','PeriodTo','Product','UnitsSold','Revenue','ProductCost','GrossProfit','GrossMarginPercent'];
-  const rows=result.rows.map(row=>[dataset.filename,dataset.currencyCode,range.from,range.to,row.product,row.unitsSold,row.revenue,row.productCost,row.grossProfit,row.grossMargin]);
+  const head=['ProductSourceFile','Currency','PeriodFrom','PeriodTo','Product','UnitsSold','Revenue','ProductCost','GrossProfit','GrossMarginPercent','RevenueBudget','RevenueVariance','RevenueVariancePercent','RevenueBudgetResult','BudgetRowsProvided','BudgetRowsTotal','SalesVolumeVariance','SalesPriceVariance','CostBudget','CostVariance','SalesBreakdownRows','CostBudgetRows'];
+  const rows=result.rows.map(row=>{const source=result.sourceRows.filter(source=>source.product===row.product);const budget=productBudgetTotals(source);const variances=salesCostTotals(source);return[dataset.filename,dataset.currencyCode,range.from,range.to,row.product,row.unitsSold,row.revenue,row.productCost,row.grossProfit,row.grossMargin,budget.budget??'',budget.amount,budget.percentage,budget.complete?budget.outcome:budget.status,budget.provided,budget.count,variances.volumeVariance,variances.priceVariance,variances.costBudget,variances.costVariance,variances.salesProvided,variances.costsProvided];});
+  return '\uFEFF'+[head,...rows].map(row=>row.map(escapeCsvCell).join(',')).join('\r\n')+'\r\n';
+}
+
+export function exportProductBudgetCsv(dataset:ProductDataset,range:MonthRange,selectedProduct=''):string{
+  const result=summarizeProductBudgets(dataset,range,selectedProduct);
+  const variances=summarizeSalesCost(dataset,range,selectedProduct);
+  if(!result.rows.length||(!result.provided&&!variances.provided))throw new Error('Product budgets not provided for this selection.');
+  const head=['ProductSourceFile','Currency','PeriodFrom','PeriodTo','SelectedProduct','Month','Product','ActualRevenue','RevenueBudget','Variance','VariancePercent','Result','ActualUnits','BudgetedUnits','ActualSellingPrice','BudgetedSellingPrice','PlannedRevenue','PlanDifference','Reconciliation','SalesVolumeVariance','SalesPriceVariance','CostBudget','ActualCost','CostVariance','VolumeResult','PriceResult','CostResult'];
+  const rows=result.rows.map((row,index)=>{const value=variances.rows[index];return[dataset.filename,dataset.currencyCode,range.from,range.to,selectedProduct||'All products',row.month,row.product,row.revenue,row.budget??'',row.amount,row.percentage,row.outcome,value.unitsSold,value.budgetedUnits??'',value.actualSellingPrice,value.budgetedSellingPrice??'',value.expectedRevenueBudget,value.reconciliationDifference,value.reconciliation,value.volumeVariance,value.priceVariance,value.costBudget??'',value.productCost,value.costVariance,value.volumeOutcome,value.priceOutcome,value.costOutcome];});
   return '\uFEFF'+[head,...rows].map(row=>row.map(escapeCsvCell).join(',')).join('\r\n')+'\r\n';
 }

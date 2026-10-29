@@ -67,7 +67,7 @@ test('CSV/XLSX product templates and a real multi-worksheet workbook parse corre
 test('PDF appends separate product-currency pages with long names, losses, zero margins and pagination',async()=>{
   const dataset=await fixture();const fonts={regular:(await readFile(new URL('../public/fonts/DejaVuSans.ttf',import.meta.url))).toString('base64'),bold:(await readFile(new URL('../public/fonts/DejaVuSans-Bold.ttf',import.meta.url))).toString('base64')};
   const input={periods:demoPeriods,currencyCode:'USD',filename:'',isDemo:true,productDataset:dataset,selectedRange:range};
-  const doc=createPdfReport(input,fonts);assert.equal(doc.getNumberOfPages(),4);
+  const doc=createPdfReport(input,fonts);assert.equal(doc.getNumberOfPages(),7);
   await mkdir('/tmp/product-reports',{recursive:true});await writeFile('/tmp/product-reports/sample.pdf',Buffer.from(doc.output('arraybuffer')));
   const rows=Array.from({length:120},(_,index)=>({...dataset.rows[index%6],product:`Fictional long product — ${index} ${'sample '.repeat(15)}`}));
   const multi=createPdfReport({...input,productDataset:{...dataset,rows}},fonts);assert.ok(multi.getNumberOfPages()>5);await writeFile('/tmp/product-reports/multi.pdf',Buffer.from(multi.output('arraybuffer')));

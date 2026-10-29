@@ -1,0 +1,43 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+import Papa from 'papaparse';
+async function analyze(page:import('@playwright/test').Page){await page.getByLabel('Product file currency',{exact:true}).selectOption('PKR');await page.getByLabel('I confirm these mappings describe product-month summaries and the selected product currency.').check();await page.getByRole('button',{name:'Validate product data'}).click();await page.getByRole('button',{name:'Import product data'}).click();}
+
+test('product budgets are optional, amount-weighted, independently filtered and exported without changing monthly budgets',async({page},testInfo)=>{
+  const errors:string[]=[],posts:string[]=[];page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='POST')posts.push(request.url());});
+  await page.goto('/',{waitUntil:'networkidle'});
+  const monthly=page.locator('section[aria-label="Key financial indicators"]'),overall=page.locator('#revenue-budget');
+  const originalMonthly=await monthly.innerText(),originalBudget=await overall.innerText();
+  const upload=page.getByLabel('Choose a product data file');
+  const csv='Period,Item,Qty,Sales,Cost,Sales Budget\n2026-02,A,2,300,80,600\n2026-01,A,1,100,40,50\n2026-01,B,1,80,40,0\n2026-02,B,0,0,10,0\n2026-03,C,1,50,30,';
+  await upload.setInputFiles({name:'product-budgets.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
+  await expect(page.getByLabel('Map product Revenue Budget',{exact:true})).toHaveValue('5');
+  expect(await page.getByLabel('Map product Revenue',{exact:true}).locator('option[value="5"]').evaluate(option=>(option as HTMLOptionElement).disabled)).toBe(true);
+  await analyze(page);
+  expect(await monthly.innerText()).toBe(originalMonthly);expect(await overall.innerText()).toBe(originalBudget);
+  const budget=page.locator('#product-revenue-budget'),card=(name:string)=>budget.getByRole('heading',{name,exact:true}).locator('..');
+  await expect(budget).toContainText('Product budget incomplete: 4 of 5');await expect(card('Actual product revenue')).toContainText(/PKR\s+530/);await expect(card('Product revenue budget')).toContainText('N/A');await expect(card('Product budget variance')).toContainText('N/A');
+  const rows=budget.locator('tbody tr');await expect(rows).toHaveCount(5);await expect(rows.nth(4)).toContainText('Not provided');await expect(rows.nth(4)).toContainText('Budget not provided');
+  await page.getByLabel('Filter product',{exact:true}).selectOption('A');
+  await expect(rows).toHaveCount(2);await expect(card('Actual product revenue')).toContainText(/PKR\s+400/);await expect(card('Product revenue budget')).toContainText(/PKR\s+650/);await expect(card('Product budget variance')).toContainText(/-PKR\s+250/);await expect(card('Product budget variance %')).toContainText('-38.5%');
+  await expect(rows.nth(0)).toContainText('Favorable');await expect(rows.nth(0)).toContainText('100.0%');await expect(rows.nth(1)).toContainText('Adverse');await expect(rows.nth(1)).toContainText('-50.0%');
+  expect(await monthly.innerText()).toBe(originalMonthly);expect(await overall.innerText()).toBe(originalBudget);
+  await page.getByLabel('To month',{exact:true}).fill('2026-02');
+  const filteredMonthly=await monthly.innerText(),filteredOverall=await overall.innerText();
+  const chart=budget.locator('.recharts-wrapper');await chart.scrollIntoViewIfNeeded();const tick=budget.locator('text.recharts-cartesian-axis-tick-value').filter({hasText:'2026-02'});const tickBox=await tick.boundingBox(),chartBox=await chart.boundingBox();await page.mouse.move(tickBox!.x+tickBox!.width/2,chartBox!.y+chartBox!.height*.4);await expect(budget.locator('.recharts-tooltip-wrapper')).toContainText(/PKR\s+600/);
+  const event=page.waitForEvent('download');await page.getByRole('button',{name:'Download product budget CSV',exact:true}).click();const file=await event;const path=testInfo.outputPath('product-budget.csv');await file.saveAs(path);
+  const parsed=Papa.parse<Record<string,string>>((await readFile(path)).toString(),{header:true,skipEmptyLines:true});expect(parsed.errors).toEqual([]);expect(parsed.data.map(row=>[row.Month,row.Product,row.RevenueBudget,row.Variance,row.VariancePercent,row.Result])).toEqual([['2026-01','A','50','50','100','Favorable'],['2026-02','A','600','-300','-50','Adverse']]);expect(parsed.data.every(row=>row.SelectedProduct==='A'&&row.Currency==='PKR'&&row.PeriodTo==='2026-02')).toBe(true);
+  const aggregateEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download product CSV',exact:true}).click();const aggregate=await aggregateEvent;const aggregatePath=testInfo.outputPath('products.csv');await aggregate.saveAs(aggregatePath);const grouped=Papa.parse<Record<string,string>>((await readFile(aggregatePath)).toString(),{header:true,skipEmptyLines:true}).data;expect(grouped).toHaveLength(1);expect(grouped[0].RevenueBudget).toBe('650');expect(grouped[0].RevenueVariance).toBe('-250');expect(grouped[0].GrossProfit).toBe('280');
+  const pdfEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download PDF',exact:true}).click();await(await pdfEvent).saveAs(testInfo.outputPath('product-budgets.pdf'));
+  await page.mouse.move(1550,10);await budget.screenshot({path:testInfo.outputPath('product-budget-desktop.png')});
+  await page.getByLabel('From month',{exact:true}).fill('2026-02');await expect(card('Actual product revenue')).toContainText(/PKR\s+300/);await expect(card('Product budget variance %')).toContainText('-50.0%');
+  await page.getByLabel('From month',{exact:true}).fill('2026-01');
+  await page.getByLabel('Filter product',{exact:true}).selectOption('B');await expect(card('Product revenue budget')).toContainText(/PKR\s+0/);await expect(card('Product budget variance %')).toContainText('N/A');await expect(rows.nth(0)).toContainText('Favorable');await expect(rows.nth(1)).toContainText('On budget');
+  expect(await monthly.innerText()).toBe(filteredMonthly);expect(await overall.innerText()).toBe(filteredOverall);
+  await page.getByRole('button',{name:'All months',exact:true}).click();await page.getByLabel('Filter product',{exact:true}).selectOption('C');await expect(budget).toContainText('Product budgets not provided');await expect(page.locator('#product-profitability').getByRole('table',{name:'Product profitability in PKR'}).locator('tbody tr')).toHaveCount(1);await expect(page.getByRole('button',{name:'Download product budget CSV',exact:true})).toHaveCount(0);
+  await page.getByLabel('Filter product',{exact:true}).selectOption('A');await page.getByLabel('To month',{exact:true}).fill('2026-02');await page.setViewportSize({width:390,height:844});await budget.scrollIntoViewIfNeeded();await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth,undefined,{timeout:5000});await budget.screenshot({path:testInfo.outputPath('product-budget-mobile.png')});
+  await upload.setInputFiles({name:'legacy.csv',mimeType:'text/csv',buffer:Buffer.from('Month,Product,Units Sold,Revenue,Product Cost\n2026-01,Legacy,1,100,40')});await expect(page.getByLabel('Map product Revenue Budget',{exact:true})).toHaveValue('');await analyze(page);await expect(page.getByLabel('Filter product',{exact:true})).toHaveValue('');await expect(budget).toContainText('Product budgets not provided');await expect(page.locator('#product-profitability').getByRole('table',{name:'Product profitability in PKR'})).toContainText(/PKR\s+60/);
+  const templateEvent=page.waitForEvent('download');await page.getByRole('link',{name:'Product XLSX template',exact:true}).click();const template=await templateEvent;const templatePath=testInfo.outputPath('template.xlsx');await template.saveAs(templatePath);await upload.setInputFiles(templatePath);await page.getByLabel('Product worksheet',{exact:true}).selectOption('0');await expect(page.getByLabel('Map product Revenue Budget',{exact:true})).toHaveValue('5');await analyze(page);await page.getByRole('button',{name:'All months',exact:true}).click();await expect(card('Product revenue budget')).toContainText(/PKR\s+602,000/);
+  const longName='SKU'+'X'.repeat(190);await upload.setInputFiles({name:'long-product.csv',mimeType:'text/csv',buffer:Buffer.from(`Month,Product,Units Sold,Revenue,Product Cost,Revenue Budget\n2026-01,${longName},1,100,40,50`)});await analyze(page);await page.getByLabel('Filter product',{exact:true}).selectOption(longName);await budget.scrollIntoViewIfNeeded();await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth,undefined,{timeout:5000});
+  expect(errors).toEqual([]);expect(posts).toEqual([]);
+});
