@@ -1,0 +1,66 @@
+import {test,expect,type Page} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+import Papa from 'papaparse';
+async function analyze(page:Page) {
+  for(const [index,field] of ['Month (required)','Revenue (required)','COGS','OperatingExpenses','OtherExpenses','Tax'].entries())await page.getByLabel(field,{exact:true}).selectOption(String(index));
+  await page.getByLabel('File currency',{exact:true}).selectOption('PKR');
+  await page.getByLabel('I confirm these column mappings describe monthly summaries.').check();
+  await page.getByRole('button',{name:'Validate and review'}).click();
+  await page.getByRole('button',{name:'Import and analyze'}).click();
+}
+test('optional monthly revenue budgets preserve legacy imports and filter actuals, budgets, charts and reports',async({page},testInfo)=>{
+  const errors:string[]=[],posts:string[]=[];
+  page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='POST')posts.push(request.url());});
+  await page.goto('/',{waitUntil:'networkidle'});
+  const section=page.locator('#revenue-budget');
+  const card=(name:string)=>section.getByRole('heading',{name,exact:true}).locator('..');
+  await expect(section).toContainText('Unfavorable');
+  await expect(card('Total revenue budget')).toContainText(/USD\s+1,325,000/);
+  const upload=page.getByLabel('1. Choose a financial data file');
+  await upload.setInputFiles(`${process.cwd()}/tests/fixtures/fictional-pkr-six-months.csv`);
+  await expect(page.getByLabel('Revenue Budget (optional)',{exact:true})).toHaveValue('');
+  await analyze(page);
+  await expect(section).toContainText('Budget not provided');await expect(card('Variance amount')).toContainText('N/A');
+  await expect(section.locator('.recharts-wrapper')).toHaveCount(0);
+  await upload.setInputFiles(`${process.cwd()}/tests/fixtures/fictional-pkr-revenue-budget.csv`);
+  await expect(page.getByLabel('Revenue Budget (optional)',{exact:true})).toHaveValue('6');
+  expect(await page.getByLabel('Revenue (required)',{exact:true}).locator('option[value="6"]').evaluate(option=>(option as HTMLOptionElement).disabled)).toBe(true);
+  await analyze(page);
+  await expect(card('Total actual revenue')).toContainText(/PKR\s+5,000,000/);
+  await expect(section).toContainText('Budget incomplete: 5 of 6 months provided');
+  await expect(card('Total revenue budget')).toContainText('Not provided');await expect(card('Variance amount')).toContainText('N/A');
+  const rows=section.locator('tbody tr');await expect(rows).toHaveCount(6);
+  await expect(rows.nth(0)).toContainText('Favorable');await expect(rows.nth(0)).toContainText('11.1%');
+  await expect(rows.nth(1)).toContainText('Unfavorable');await expect(rows.nth(1)).toContainText(/-PKR\s+100,000/);
+  await expect(rows.nth(3)).toContainText('On budget');await expect(rows.nth(3)).toContainText('N/A');
+  await expect(rows.nth(4)).toContainText('Not provided');await expect(rows.nth(4)).toContainText('Budget not provided');
+  const chart=section.locator('.recharts-wrapper');await chart.scrollIntoViewIfNeeded();
+  const ticks=section.locator('text.recharts-cartesian-axis-tick-value').filter({hasText:/^2026-0[1-6]$/});await expect(ticks).toHaveCount(6);
+  const tick=await ticks.nth(4).boundingBox(),box=await chart.boundingBox();await page.mouse.move(tick!.x+tick!.width/2,box!.y+box!.height*.4);
+  const tip=section.locator('.recharts-tooltip-wrapper');await expect(tip).toBeVisible();await expect(tip).toContainText(/PKR\s+900,000/);await expect(tip).not.toContainText('Revenue budget');
+  await page.getByLabel('From month',{exact:true}).fill('2026-01');await page.getByLabel('To month',{exact:true}).fill('2026-04');
+  await expect(card('Total actual revenue')).toContainText(/PKR\s+2,600,000/);await expect(card('Total revenue budget')).toContainText(/PKR\s+2,700,000/);
+  await expect(card('Variance amount')).toContainText(/-PKR\s+100,000/);await expect(card('Variance percentage')).toContainText('-3.7%');
+  await expect(rows).toHaveCount(4);
+  const csvEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV',exact:true}).click();const csv=await csvEvent;const csvPath=testInfo.outputPath('budget.csv');await csv.saveAs(csvPath);
+  const parsed=Papa.parse<Record<string,string>>((await readFile(csvPath)).toString(),{header:true,skipEmptyLines:true});expect(parsed.errors).toEqual([]);expect(parsed.data).toHaveLength(4);
+  expect(parsed.data.map(row=>row.RevenueBudget)).toEqual(['900000','1300000','500000','0']);
+  expect(parsed.data.map(row=>row.RevenueBudgetResult)).toEqual(['Favorable','Unfavorable','Unfavorable','On budget']);
+  expect(parsed.data[3].RevenueBudgetVariancePercent).toBe('N/A');expect(parsed.data.every(row=>row.Currency==='PKR'&&row.PeriodTo==='2026-04')).toBe(true);
+  const pdfEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download PDF',exact:true}).click();await (await pdfEvent).saveAs(testInfo.outputPath('budget.pdf'));
+  await page.mouse.move(1550,10);await section.screenshot({path:testInfo.outputPath('budget-desktop.png')});
+  await page.setViewportSize({width:390,height:844});await section.scrollIntoViewIfNeeded();await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth,undefined,{timeout:5000});
+  await section.screenshot({path:testInfo.outputPath('budget-mobile.png')});
+  await page.getByLabel('From month',{exact:true}).fill('2026-04');
+  await expect(card('Total revenue budget')).toContainText(/PKR\s+0/);await expect(card('Variance percentage')).toContainText('N/A');
+  await page.getByRole('button',{name:'All months',exact:true}).click();await expect(section).toContainText('Budget incomplete: 5 of 6');
+  await page.getByRole('button',{name:'Reset to demo',exact:true}).click();await expect(card('Total revenue budget')).toContainText(/USD\s+1,325,000/);
+  for(const extension of ['csv','xlsx']) {
+    const event=page.waitForEvent('download');await page.getByRole('link',{name:`${extension.toUpperCase()} template`,exact:false}).click();
+    const file=await event;const path=testInfo.outputPath(`template.${extension}`);await file.saveAs(path);await upload.setInputFiles(path);
+    if(extension==='xlsx')await page.getByLabel('Worksheet',{exact:true}).selectOption('0');
+    await expect(page.getByLabel('Revenue Budget (optional)',{exact:true})).toHaveValue('6');await analyze(page);
+    await expect(card('Total revenue budget')).toContainText(/PKR\s+585,000/);
+  }
+  expect(errors).toEqual([]);expect(posts).toEqual([]);
+});

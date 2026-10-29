@@ -3,6 +3,7 @@ import readXlsxFile from 'read-excel-file/browser';
 import type { FinancialPeriod } from './finance.ts';
 
 export const columns = ['Month', 'Revenue', 'COGS', 'OperatingExpenses', 'OtherExpenses', 'Tax'] as const;
+export const mappingColumns = [...columns, 'RevenueBudget'] as const;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_ROWS = 1000;
 export const MAX_AMOUNT = 1_000_000_000_000;
@@ -33,7 +34,15 @@ export function validateRows(rows: unknown[][]): ImportResult {
       if (!Number.isFinite(value) || value < 0 || value > MAX_AMOUNT) errors.push(`Row ${row}: ${column} must be a non-negative number no greater than ${MAX_AMOUNT} (no currency symbols or separators).`);
       return value;
     });
-    periods.push({ month, revenue: values[0], costOfRevenue: values[1], operatingExpenses: values[2], otherExpenses: values[3], taxes: values[4] });
+    const budgetIndex = headers.indexOf('RevenueBudget');
+    const rawBudget = budgetIndex < 0 ? undefined : cells[budgetIndex];
+    let revenueBudget: number | undefined;
+    if (rawBudget !== undefined && rawBudget !== null && String(rawBudget).trim() !== '') {
+      const text=typeof rawBudget==='string'?rawBudget.trim():'';
+      revenueBudget=typeof rawBudget==='number'?rawBudget:/^\d+(\.\d+)?$/.test(text)?Number(text):NaN;
+      if(!Number.isFinite(revenueBudget)||revenueBudget<0||revenueBudget>MAX_AMOUNT) errors.push(`Row ${row}: RevenueBudget must be a non-negative number no greater than ${MAX_AMOUNT}, or blank when not provided.`);
+    }
+    periods.push({ ...(revenueBudget===undefined?{}:{revenueBudget}), month, revenue: values[0], costOfRevenue: values[1], operatingExpenses: values[2], otherExpenses: values[3], taxes: values[4] });
   }
   return errors.length ? { periods: [], errors } : { periods: periods.sort((a, b) => a.month.localeCompare(b.month)), errors: [] };
 }
@@ -60,7 +69,7 @@ export async function parseFinancialFile(file: File): Promise<ImportResult> {
 }
 
 export type SourceSheet = { name: string; headers: string[]; rows: unknown[][] };
-export type Field = typeof columns[number];
+export type Field = typeof mappingColumns[number];
 export type Mapping = Partial<Record<Field, number | 'zero'>>;
 export const currencies = ['USD', 'PKR', 'AED', 'GBP', 'EUR'] as const;
 export type CurrencyCode = typeof currencies[number];
@@ -90,10 +99,11 @@ const aliases: Record<Field, string[]> = {
   OperatingExpenses: ['operatingexpenses', 'opex', 'operatingcosts'],
   OtherExpenses: ['otherexpenses', 'othercosts', 'interest'],
   Tax: ['tax', 'taxes', 'incometax'],
+  RevenueBudget: ['revenuebudget','budgetrevenue','salesbudget','budgetedsales','budgetedrevenue','budget'],
 };
 export function suggestMapping(headers: string[]): Mapping {
   const mapping: Mapping = {};
-  for (const field of columns) {
+  for (const field of mappingColumns) {
     const matches = headers.map((header, index) => aliases[field].includes(header.toLowerCase().replace(/[^a-z0-9]/g, '')) ? index : -1).filter(index => index >= 0);
     if (matches.length === 1 && !Object.values(mapping).includes(matches[0])) mapping[field] = matches[0];
   }
@@ -106,10 +116,11 @@ export function validateMapping(sheet: SourceSheet, mapping: Mapping, currencyCo
   if (!confirmed) errors.push('Confirm the column mappings before validating.');
   if (Object.values(mapping).includes('zero') && !zeroConfirmed) errors.push('Confirm that the selected expense fields do not apply and should use 0.');
   const used = new Set<number>();
-  for (const field of columns) {
+  for (const field of mappingColumns) {
     const source = mapping[field];
-    if (source === 'zero' && field !== 'Month' && field !== 'Revenue') continue;
-    if (typeof source !== 'number' || !Number.isInteger(source) || source < 0 || source >= sheet.headers.length || !sheet.headers[source]) errors.push(`Map ${field} to a source column${field === 'Month' || field === 'Revenue' ? ' (required)' : ' or explicitly choose Not applicable — use 0'}.`);
+    if (field === 'RevenueBudget' && source === undefined) continue;
+    if (source === 'zero' && field !== 'Month' && field !== 'Revenue' && field !== 'RevenueBudget') continue;
+    if (typeof source !== 'number' || !Number.isInteger(source) || source < 0 || source >= sheet.headers.length || !sheet.headers[source]) errors.push(`Map ${field} to a source column${field === 'RevenueBudget' ? ' or leave it unmapped (budget not provided)' : field === 'Month' || field === 'Revenue' ? ' (required)' : ' or explicitly choose Not applicable — use 0'}.`);
     else if (used.has(source)) errors.push(`Duplicate mapping: ${sheet.headers[source]} is used more than once.`);
     else used.add(source);
   }
@@ -117,5 +128,6 @@ export function validateMapping(sheet: SourceSheet, mapping: Mapping, currencyCo
   if (duplicates.length) errors.push(`Duplicate column names: ${[...new Set(duplicates)].join(', ')}. Use unique headers.`);
   if (errors.length) return { periods: [], errors };
   const rows = sheet.rows.filter(row => row.some(value => value != null && String(value).trim() !== ''));
-  return validateRows([columns.slice(), ...rows.map(row => columns.map(field => mapping[field] === 'zero' ? 0 : row[mapping[field] as number]))]);
+  const mapped = typeof mapping.RevenueBudget === 'number' ? mappingColumns : columns;
+  return validateRows([mapped.slice(), ...rows.map(row => mapped.map(field => mapping[field] === 'zero' ? 0 : row[mapping[field] as number]))]);
 }

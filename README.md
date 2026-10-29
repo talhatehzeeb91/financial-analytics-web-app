@@ -53,7 +53,7 @@ Use the CSV or XLSX template, or choose your own monthly summary file. Parsing h
 
 1. Select a `.csv` or `.xlsx` file. For Excel, explicitly select a worksheet; only that sheet is analyzed.
 2. Preview the headers and first five non-empty data rows. The first non-empty row must contain unique column headers.
-3. Map your columns to Month, Revenue, COGS, OperatingExpenses, OtherExpenses and Tax. Names do not need to match. Common aliases such as Period, Sales, Cost of Sales, Opex and Taxes are suggested; ambiguous matches remain unassigned. Confirm the mappings yourself. Each source column can be used once; extra unmapped columns are ignored.
+3. Map your columns to Month, Revenue, COGS, OperatingExpenses, OtherExpenses and Tax, plus optional Revenue Budget. Names do not need to match. Common aliases such as Period, Sales, Cost of Sales, Opex and Taxes are suggested; ambiguous matches remain unassigned. Confirm the mappings yourself. Each source column can be used once; extra unmapped columns are ignored.
 4. Month and Revenue must map to real source columns. Every expense must map to a column or explicitly use **Not applicable — use 0**. This choice requires a separate confirmation; missing financial columns never silently become zero. Blank cells in mapped financial columns remain invalid.
 5. Select the currency already used by the whole file: USD, PKR, AED, GBP or EUR. Every card, chart and table uses that currency code. Amounts are not converted or detected automatically. Templates contain fictional USD data.
 6. Click **Validate and review**, then inspect the month count, range, currency, totals and zero-expense fields. The dashboard changes only after **Import and analyze**. Editing a mapping, worksheet, currency or confirmation invalidates the review; validate again before importing.
@@ -63,15 +63,15 @@ Use the CSV or XLSX template, or choose your own monthly summary file. Parsing h
 The expandable **How to prepare your data** guide includes a sample table and plain-English field definitions. Both downloadable templates contain the same three fictional months and are covered by parser/mapping tests.
 
 ```csv
-Month,Revenue,COGS,OperatingExpenses,OtherExpenses,Tax
-2026-01,182000,76000,54000,2000,10000
+Month,Revenue,COGS,OperatingExpenses,OtherExpenses,Tax,RevenueBudget
+2026-01,182000,76000,54000,2000,10000,180000
 ```
 
 Prepare one row per month, not individual sales or invoices. Month must be YYYY-MM (year 0001–9999); store Excel months as text, not date cells. Months must be unique. Amounts must be finite non-negative numbers without currency symbols or thousands separators. Enter 0 when an amount does not apply, or explicitly confirm a zero mapping for the expense field. Do not use merged cells or total/subtotal rows. Expense categories must not overlap; each cost is counted once, and OtherExpenses excludes Tax.
 
 Maximum file size: 5 MB; maximum data rows per selected sheet: 1,000; maximum individual amount: 1 trillion in the selected currency. Blank rows are ignored. Validation reports missing mappings, duplicate mappings/headers/months, invalid values with row and field names, empty files and unreadable workbooks. Reported validation row numbers count non-empty data rows, with the header counted as row 1.
 
-Product profitability requires product-level sales and costs, while budget variance requires a separate budget dataset; neither is provided by this monthly upload. No currency conversion, transaction aggregation or budget/category inference is performed.
+Product profitability requires product-level sales and costs and is not provided. Monthly revenue budget variance is available through the optional RevenueBudget column; expense budget comparisons are not included. No currency conversion, transaction aggregation or budget/category inference is performed.
 
 ### Validation
 
@@ -99,3 +99,17 @@ The complete imported dataset remains in memory unchanged. Missing, invalid or r
 A confirmed new import or **Reset to demo** restores the new dataset’s full range. Merely previewing another file leaves both the active data and its filter unchanged. CSV includes `PeriodFrom` and `PeriodTo` on every exported row; PDF headings and download filenames explicitly identify the selected boundaries, including when an endpoint has no recorded month. The currency is retained with no conversion.
 
 The date-range regression checks February–April of the fictional six-month PKR fixture: revenue 1,600,000, gross profit 650,000, operating profit 200,000, net profit 95,000 and a 5.9% weighted net margin. Unit tests cover inclusive selection, original-data preservation, invalid/no-data ranges and report boundaries. Browser tests cover filtered chart tooltips, CSV values, PDF download, 390 px controls, reset behavior and N/A for April alone. The actual downloaded PDF was text-extracted and visually inspected for the selected period and correct figures.
+
+## Monthly Revenue Budget vs Actual
+
+`RevenueBudget` is an **optional** non-negative monthly planned revenue amount in the same currency as actual revenue. The six original columns remain required and existing CSV/XLSX files remain compatible. Common headers such as Sales Budget and Budgeted Revenue are suggested in mapping; confirm them before import. Leave the budget field unmapped or leave individual budget cells blank when unavailable. Missing budgets are never zero. An explicit `0` is a real zero budget; the mapping does not offer an automatic-zero choice for budgets. The same finite-number and 1 trillion per-amount limit applies.
+
+The dashboard compares actual revenue and budget for the selected reporting period, with a monthly chart and table. Variance amount = actual revenue − revenue budget; percentage = variance ÷ budget × 100. Higher revenue is **Favorable**, lower is **Unfavorable**, and equal is **On budget**. Zero or missing budgets produce N/A percentages. A missing monthly budget also produces N/A variance amount. Missing budgets form gaps in the chart, not zero points.
+
+Period totals are compared only when **every selected month** has a budget. For partial coverage, actual revenue still includes all selected months, but aggregate budget/variance/percentage are unavailable and a coverage message explains why. Available monthly comparisons remain visible. With no budgets, the section clearly says **Budget not provided** and does not draw a misleading comparison chart. The date filter never discards source data.
+
+Both fictional CSV/XLSX templates now include the optional budget column. Demo actuals and profit formulas are unchanged; fictional demo budgets total USD 1,325,000 against USD 1,320,000 actual revenue, yielding an unfavorable USD 5,000 variance (−0.4%).
+
+CSV adds RevenueBudget, RevenueBudgetVariance, RevenueBudgetVariancePercent and RevenueBudgetResult. Missing budgets are blank, and missing variances/percentages are N/A. PDF retains existing financial pages and adds a paginated revenue-budget summary/table when budgets exist; otherwise it explicitly says Budget not provided. Selected boundaries and currency apply to every report section with no conversion. All budget parsing/calculation/export processing stays in the browser.
+
+`lib/budget.ts` contains the independent variance and coverage logic. Budget tests cover positive/negative/equal variances, zero and missing budgets, partial coverage, legacy inputs, mapping validation, both templates, filtered CSV/PDF output and paginated budget tables. Browser checks cover optional mapping, no-budget and partial-budget states, favorable/unfavorable rows, zero budgets, chart gaps/tooltips, reporting-period changes, PKR exports, template downloads/imports, reset and mobile layout.
