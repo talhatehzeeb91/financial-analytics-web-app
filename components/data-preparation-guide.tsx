@@ -24,7 +24,7 @@ export function DataPreparationGuide() {
         <li>Use plain cells: no merged cells, total rows or subtotal rows. The dashboard calculates totals for you.</li>
         <li>For XLSX, choose the worksheet you want to import. Only that worksheet is analyzed. Blank rows are ignored. Maximum 5 MB, 1,000 monthly rows and 1 trillion per amount. Validate and review the summary before clicking “Import and analyze”; choosing a file alone does not change the dashboard.</li>
       </ul></div>
-      <p className="rounded-lg border border-teal-100 bg-teal-50 p-3 text-xs leading-5 text-teal-900"><strong>What this upload provides:</strong> monthly revenue, expenses and profit. Optional RevenueBudget enables monthly Revenue Budget vs Actual. Variance is actual minus budget; positive is favorable, negative unfavorable. A zero or missing budget gives N/A for variance percentage. Missing budgets are not zero; period-wide budget comparisons require all selected months to have budgets. Product profitability still needs product-level sales and cost datasets and is not provided.</p>
+      <p className="rounded-lg border border-teal-100 bg-teal-50 p-3 text-xs leading-5 text-teal-900"><strong>What this upload provides:</strong> monthly revenue, expenses and profit. Optional RevenueBudget enables monthly Revenue Budget vs Actual. Variance is actual minus budget; positive is favorable, negative adverse. A zero or missing budget gives N/A for variance percentage. Missing budgets are not zero; period-wide budget comparisons require all selected months to have budgets. Product profitability still needs product-level sales and cost datasets and is not provided.</p>
     </div>
   </details>;
 }
