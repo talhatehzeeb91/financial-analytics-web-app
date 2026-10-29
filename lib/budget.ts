@@ -5,7 +5,7 @@ export function revenueVariance(actual: number, budget: number | undefined) {
   return {
     budget: budget ?? null, amount,
     percentage: budget === undefined || budget === 0 ? null : (actual-budget)/budget*100,
-    outcome: amount === null ? 'Budget not provided' : amount > 0 ? 'Favorable' : amount < 0 ? 'adverse' : 'On budget',
+    outcome: amount === null ? 'Budget not provided' : amount > 0 ? 'Favorable' : amount < 0 ? 'Adverse' : 'On budget',
   };
 }
 export function summarizeRevenueBudget(periods: FinancialPeriod[]) {
