@@ -4,7 +4,8 @@ import type { FinancialPeriod } from './finance.ts';
 
 export const columns = ['Month', 'Revenue', 'COGS', 'OperatingExpenses', 'OtherExpenses', 'Tax'] as const;
 export const optionalBudgetColumns = ['RevenueBudget', 'COGSBudget'] as const;
-export const mappingColumns = [...columns, ...optionalBudgetColumns] as const;
+export const optionalColumns = [...optionalBudgetColumns, 'FixedCosts', 'VariableCosts'] as const;
+export const mappingColumns = [...columns, ...optionalColumns] as const;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_ROWS = 1000;
 export const MAX_AMOUNT = 1_000_000_000_000;
@@ -35,8 +36,8 @@ export function validateRows(rows: unknown[][]): ImportResult {
       if (!Number.isFinite(value) || value < 0 || value > MAX_AMOUNT) errors.push(`Row ${row}: ${column} must be a non-negative number no greater than ${MAX_AMOUNT} (no currency symbols or separators).`);
       return value;
     });
-    const budgets: Pick<FinancialPeriod, 'revenueBudget' | 'cogsBudget'> = {};
-    for (const [column,key] of [['RevenueBudget','revenueBudget'],['COGSBudget','cogsBudget']] as const) {
+    const budgets: Pick<FinancialPeriod, 'revenueBudget' | 'cogsBudget' | 'fixedCosts' | 'variableCosts'> = {};
+    for (const [column,key] of [['RevenueBudget','revenueBudget'],['COGSBudget','cogsBudget'],['FixedCosts','fixedCosts'],['VariableCosts','variableCosts']] as const) {
       const index = headers.indexOf(column);
       const raw = index < 0 ? undefined : cells[index];
       if (raw === undefined || raw === null || String(raw).trim() === '') continue;
@@ -102,6 +103,8 @@ const aliases: Record<Field, string[]> = {
   OperatingExpenses: ['operatingexpenses', 'opex', 'operatingcosts'],
   OtherExpenses: ['otherexpenses', 'othercosts', 'interest'],
   Tax: ['tax', 'taxes', 'incometax'],
+  FixedCosts: ['fixedcosts','fixedcost','totalfixedcosts','monthlyfixedcosts'],
+  VariableCosts: ['variablecosts','variablecost','totalvariablecosts','monthlyvariablecosts'],
   COGSBudget: ['cogsbudget','budgetcogs','budgetedcogs','costofsalesbudget','budgetedcostofsales','costofgoodssoldbudget'],
   RevenueBudget: ['revenuebudget','budgetrevenue','salesbudget','budgetedsales','budgetedrevenue','budget'],
 };
@@ -122,9 +125,9 @@ export function validateMapping(sheet: SourceSheet, mapping: Mapping, currencyCo
   const used = new Set<number>();
   for (const field of mappingColumns) {
     const source = mapping[field];
-    if (optionalBudgetColumns.some(column => column === field) && source === undefined) continue;
-    if (source === 'zero' && field !== 'Month' && field !== 'Revenue' && !optionalBudgetColumns.some(column => column === field)) continue;
-    if (typeof source !== 'number' || !Number.isInteger(source) || source < 0 || source >= sheet.headers.length || !sheet.headers[source]) errors.push(`Map ${field} to a source column${optionalBudgetColumns.some(column => column === field) ? ' or leave it unmapped (budget not provided)' : field === 'Month' || field === 'Revenue' ? ' (required)' : ' or explicitly choose Not applicable — use 0'}.`);
+    if (optionalColumns.some(column => column === field) && source === undefined) continue;
+    if (source === 'zero' && field !== 'Month' && field !== 'Revenue' && !optionalColumns.some(column => column === field)) continue;
+    if (typeof source !== 'number' || !Number.isInteger(source) || source < 0 || source >= sheet.headers.length || !sheet.headers[source]) errors.push(`Map ${field} to a source column${optionalColumns.some(column => column === field) ? ' or leave it unmapped (not provided)' : field === 'Month' || field === 'Revenue' ? ' (required)' : ' or explicitly choose Not applicable — use 0'}.`);
     else if (used.has(source)) errors.push(`Duplicate mapping: ${sheet.headers[source]} is used more than once.`);
     else used.add(source);
   }
@@ -132,6 +135,6 @@ export function validateMapping(sheet: SourceSheet, mapping: Mapping, currencyCo
   if (duplicates.length) errors.push(`Duplicate column names: ${[...new Set(duplicates)].join(', ')}. Use unique headers.`);
   if (errors.length) return { periods: [], errors };
   const rows = sheet.rows.filter(row => row.some(value => value != null && String(value).trim() !== ''));
-  const mapped = [...columns, ...optionalBudgetColumns.filter(field => typeof mapping[field] === 'number')];
+  const mapped = [...columns, ...optionalColumns.filter(field => typeof mapping[field] === 'number')];
   return validateRows([mapped.slice(), ...rows.map(row => mapped.map(field => mapping[field] === 'zero' ? 0 : row[mapping[field] as number]))]);
 }
