@@ -1,0 +1,45 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+import Papa from 'papaparse';
+import writeXlsxFile from 'write-excel-file/node';
+
+test('separate product upload validates, filters, preserves monthly KPIs and exports its own currency',async({page},testInfo)=>{
+  const errors:string[]=[],posts:string[]=[];page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='POST')posts.push(request.url());});
+  await page.goto('/',{waitUntil:'networkidle'});
+  const section=page.locator('#product-profitability');await expect(section).toContainText('Product data not provided');
+  const cards=page.locator('section[aria-label="Key financial indicators"]');
+  await page.getByLabel('1. Choose a financial data file').setInputFiles(`${process.cwd()}/tests/fixtures/fictional-pkr-revenue-budget.csv`);
+  for(const[index,field]of ['Month (required)','Revenue (required)','COGS','OperatingExpenses','OtherExpenses','Tax'].entries())await page.getByLabel(field,{exact:true}).selectOption(String(index));
+  await page.getByLabel('File currency',{exact:true}).selectOption('PKR');await page.getByLabel('I confirm these column mappings describe monthly summaries.').check();await page.getByRole('button',{name:'Validate and review'}).click();await page.getByRole('button',{name:'Import and analyze'}).click();
+  const upload=page.getByLabel('Choose a product data file');
+  await upload.setInputFiles({name:'missing-cost.csv',mimeType:'text/csv',buffer:Buffer.from('Period,Item,Qty,Sales,Cost\n2026-01,A,10,100,')});
+  await page.getByLabel('Product file currency',{exact:true}).selectOption('AED');await page.getByLabel('I confirm these mappings describe product-month summaries and the selected product currency.').check();await page.getByRole('button',{name:'Validate product data'}).click();
+  await expect(page.getByRole('alert',{name:'Product validation errors'})).toContainText('Product Cost must be a non-negative');await expect(page.getByRole('button',{name:'Import product data'})).toHaveCount(0);await expect(cards).toContainText(/PKR\s+5,000,000/);
+  const data=Papa.parse<string[]>((await readFile(`${process.cwd()}/public/product-template.csv`)).toString(),{skipEmptyLines:true}).data;
+  const workbook=await writeXlsxFile([{sheet:'Notes',data:[[{type:String,value:'Notes'}],[{type:String,value:'Select Products'}]]},{sheet:'Products',data:[['Period','Item','Qty','Sales','Cost'].map(value=>({type:String,value})),...data.slice(1).map(row=>row.map((value,index)=>index<2?{type:String,value}:{type:Number,value:Number(value)}))]}]).toBuffer();
+  await upload.setInputFiles({name:'fictional-products.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbook});
+  await expect(page.getByLabel('Product worksheet',{exact:true})).toHaveValue('');await page.getByLabel('Product worksheet',{exact:true}).selectOption('1');
+  await expect(section.getByRole('table',{name:'Product preview: first five rows'}).locator('tbody tr')).toHaveCount(5);
+  expect(await page.getByLabel('Map product Product Cost',{exact:true}).locator('option[value="3"]').evaluate(option=>(option as HTMLOptionElement).disabled)).toBe(true);
+  await page.getByLabel('Product file currency',{exact:true}).selectOption('AED');await page.getByLabel('I confirm these mappings describe product-month summaries and the selected product currency.').check();await page.getByRole('button',{name:'Validate product data'}).click();await page.getByRole('button',{name:'Import product data'}).click();
+  await expect(section).toContainText('Product currency AED differs from monthly currency PKR');
+  const table=section.getByRole('table',{name:'Product profitability in AED'});const rows=table.locator('tbody tr');
+  await expect(rows.locator('th')).toHaveText(['Analytics Pro','Analytics Starter','Sample Kit','Legacy Adapter']);await expect(rows.nth(0)).toContainText(/AED\s+162,500/);await expect(rows.nth(2)).toContainText('N/A');await expect(rows.nth(3)).toContainText(/-AED\s+5,000/);
+  await expect(cards).toContainText(/PKR\s+5,000,000/);await expect(page.locator('#revenue-budget')).toContainText('Budget incomplete: 5 of 6');
+  const chart=section.locator('.recharts-wrapper');await chart.scrollIntoViewIfNeeded();
+  const bar=section.locator('.recharts-bar-rectangle path').first();await bar.hover();await expect(section.locator('.recharts-tooltip-wrapper')).toContainText(/AED\s+162,500/);
+  await page.getByLabel('From month',{exact:true}).fill('2026-02');await page.getByLabel('To month',{exact:true}).fill('2026-04');
+  await expect(rows).toHaveCount(4);await expect(rows.nth(0)).toContainText(/AED\s+87,500/);await expect(rows.nth(1)).toContainText(/AED\s+56,000/);await expect(cards).toContainText(/PKR\s+1,600,000/);
+  const event=page.waitForEvent('download');await page.getByRole('button',{name:'Download product CSV',exact:true}).click();const file=await event;const path=testInfo.outputPath('products.csv');await file.saveAs(path);
+  const parsed=Papa.parse<Record<string,string>>((await readFile(path)).toString(),{header:true,skipEmptyLines:true});expect(parsed.errors).toEqual([]);expect(parsed.data.map(row=>row.GrossProfit)).toEqual(['87500','56000','-2500','-5000']);expect(parsed.data.every(row=>row.Currency==='AED'&&row.PeriodFrom==='2026-02'&&row.PeriodTo==='2026-04')).toBe(true);expect(parsed.data[2].GrossMarginPercent).toBe('N/A');
+  const monthlyEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV',exact:true}).click();const monthly=await monthlyEvent;const monthlyPath=testInfo.outputPath('monthly.csv');await monthly.saveAs(monthlyPath);const monthlyRows=Papa.parse<Record<string,string>>((await readFile(monthlyPath)).toString(),{header:true,skipEmptyLines:true}).data;expect(monthlyRows).toHaveLength(3);expect(monthlyRows.every(row=>row.Currency==='PKR')).toBe(true);expect(monthlyRows.reduce((sum,row)=>sum+Number(row.Revenue),0)).toBe(1600000);
+  const pdfEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download PDF',exact:true}).click();await(await pdfEvent).saveAs(testInfo.outputPath('products.pdf'));
+  await page.mouse.move(1550,10);await section.screenshot({path:testInfo.outputPath('products-desktop.png')});
+  await page.setViewportSize({width:390,height:844});await section.scrollIntoViewIfNeeded();await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth,undefined,{timeout:5000});await section.screenshot({path:testInfo.outputPath('products-mobile.png')});
+  await page.getByLabel('From month',{exact:true}).fill('2028-01');await page.getByLabel('To month',{exact:true}).fill('2028-02');await expect(section).toContainText('No product data in the selected period');await expect(rows).toHaveCount(0);await expect(section.getByRole('button',{name:'Export product CSV'})).toHaveCount(0);
+  await page.getByRole('button',{name:'All months',exact:true}).click();await expect(section.getByRole('table',{name:'Product profitability in AED'}).locator('tbody tr')).toHaveCount(4);
+  await page.getByRole('button',{name:'Remove product data'}).click();await expect(section).toContainText('Product data not provided');await expect(cards).toContainText(/PKR\s+5,000,000/);
+  for(const ext of ['csv','xlsx']){const event=page.waitForEvent('download');await page.getByRole('link',{name:`Product ${ext.toUpperCase()} template`,exact:true}).click();const file=await event;const path=testInfo.outputPath(`template.${ext}`);await file.saveAs(path);await upload.setInputFiles(path);if(ext==='xlsx')await page.getByLabel('Product worksheet',{exact:true}).selectOption('0');await page.getByLabel('Product file currency',{exact:true}).selectOption('USD');await page.getByLabel('I confirm these mappings describe product-month summaries and the selected product currency.').check();await page.getByRole('button',{name:'Validate product data'}).click();await page.getByRole('button',{name:'Import product data'}).click();await expect(section.getByRole('table',{name:'Product profitability in USD'}).locator('tbody tr')).toHaveCount(4);}
+  await upload.setInputFiles(`${process.cwd()}/public/product-template.csv`);await page.getByRole('button',{name:'Reset to demo',exact:true}).click();await expect(page.getByLabel('Product worksheet',{exact:true})).toHaveCount(0);await expect(section).toContainText('Product data not provided');await expect(cards).toContainText(/USD\s+1,320,000/);
+  expect(errors).toEqual([]);expect(posts).toEqual([]);
+});

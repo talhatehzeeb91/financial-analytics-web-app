@@ -19,10 +19,10 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
   doc.setProperties({ title:'Ledger financial summary', subject:report.label, creator:'Ledger — local browser export' });
   const width = doc.internal.pageSize.getWidth(), height = doc.internal.pageSize.getHeight(), margin = 14;
   const usable = width - 2*margin;
-  function heading(title: string) {
+  function heading(title: string, code=report.currencyCode) {
     doc.setFillColor(...teal); doc.rect(0,0,width,28,'F');
     doc.setTextColor(255,255,255);doc.setFont('ReportSans','bold');doc.setFontSize(18);doc.text(title,margin,13);
-    doc.setFont('ReportSans','normal');doc.setFontSize(9);doc.text(`${report.currencyCode} | Selected period: ${report.dateRange} | No currency conversion`,margin,22);
+    doc.setFont('ReportSans','normal');doc.setFontSize(9);doc.text(`${code} | Selected period: ${report.dateRange} | No currency conversion`,margin,22);
   }
   heading('ledger.  Financial summary');
   doc.setFontSize(9);doc.setFont('ReportSans','bold');doc.setTextColor(...teal);doc.text(report.label,margin,37);
@@ -73,7 +73,8 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
     'Other expenses exclude tax. Each cost is counted once.',
     'Margins are profit / revenue. Zero revenue is shown as N/A, including in the monthly table.',
     'Negative profit is a loss. PDF amounts are rounded to two decimal places; CSV retains numeric precision.',
-    'Monthly summaries only. Product profitability and expense budget variance are not included.',
+    'Monthly financial totals exclude product results. Expense budget variance is not included.',
+    `Products: ${report.products.status}.`,
     `Revenue budget: ${report.revenueBudget.status}.`,
   ];
   const notesX=width/2+5;let notesY=cursor;
@@ -123,11 +124,32 @@ export function createPdfReport(input: ReportInput, fonts: PdfFonts) {
       didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Revenue budget — continued');},
     });
   }
+  let productStart=Infinity;
+  if(report.products.rows.length>0) {
+    const product=report.products;doc.addPage();productStart=doc.getNumberOfPages();heading('ledger.  Product Profitability',product.currencyCode);
+    doc.setFont('ReportSans','normal');doc.setFontSize(8);doc.setTextColor(...ink);
+    const lines:string[]=doc.splitTextToSize(`Product source: ${product.filename}`,usable);
+    let y=37;
+    for(const line of lines){if(y>height-35){doc.addPage();heading('ledger.  Product source',product.currencyCode);y=38;}doc.text(line,margin,y);y+=4;}
+    if(y+27>height-35){doc.addPage();heading('ledger.  Product Profitability',product.currencyCode);y=38;}
+    doc.text(`Product currency: ${product.currencyCode}. Separate from monthly ${report.currencyCode} totals. No conversion or reconciliation.`,margin,y+4);
+    doc.text('Grouped by product for the selected period; sorted by gross profit. Product cost is the monthly total, excluding operating expenses and taxes.',margin,y+10);
+    doc.text('Gross margin = (revenue - product cost) / revenue. Zero revenue is N/A.',margin,y+16);
+    autoTable(doc,{
+      startY:y+22,margin:{top:38,left:margin,right:margin,bottom:19},
+      head:[['Product','Units sold',`Revenue (${product.currencyCode})`,'Product cost','Gross profit','Gross margin']],
+      body:product.rows.map(row=>[row.product,new Intl.NumberFormat('en-US',{maximumFractionDigits:20}).format(row.unitsSold),numeric.format(row.revenue),numeric.format(row.productCost),numeric.format(row.grossProfit),row.grossMargin===null?'N/A':`${row.grossMargin.toFixed(1)}%`]),
+      showHead:'everyPage',rowPageBreak:'avoid',theme:'striped',styles:{font:'ReportSans',fontSize:8,cellPadding:2.6,halign:'right',overflow:'linebreak'},
+      columnStyles:{0:{halign:'left',cellWidth:70}},headStyles:{fillColor:teal,fontStyle:'bold'},
+      didParseCell(data){if(data.section==='body' && [4,5].includes(data.column.index)){const row=product.rows[data.row.index];const value=row.grossProfit;if(data.column.index===5&&row.grossMargin===null)return;if(value!==0)data.cell.styles.textColor=value>0?teal:[185,28,28];}},
+      didDrawPage(data){if(data.pageNumber>1)heading('ledger.  Products — continued',product.currencyCode);},
+    });
+  }
   const count=doc.getNumberOfPages();
   for(let page=1;page<=count;page++) {
     doc.setPage(page);doc.setFont('ReportSans','normal');doc.setFontSize(7);doc.setTextColor(...muted);
     doc.setDrawColor(226,232,240);doc.line(margin,height-13,width-margin,height-13);
-    doc.text(`${report.isDemo?'Fictional demo data — illustrative only':'Uploaded monthly summary'} | ${report.currencyCode} | Local browser export`,margin,height-8);
+    doc.text(page>=productStart?`Uploaded product summary | ${report.products.currencyCode} | Independent of monthly financial totals`:`${report.isDemo?'Fictional demo data — illustrative only':'Uploaded monthly summary'} | ${report.currencyCode} | Local browser export`,margin,height-8);
     doc.text(`Page ${page} of ${count}`,width-margin,height-8,{align:'right'});
   }
   return doc;
